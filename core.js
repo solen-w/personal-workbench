@@ -1,3 +1,4 @@
+import {CATEGORY_NAMES, DEFAULT_CATEGORY} from './config.js';
 export const emptyData = () => ({ schemaVersion: 1, tasks: [], tombstones: [] });
 export const uid = () => crypto.randomUUID();
 const str = (v, max) => typeof v === 'string' && v.length <= max;
@@ -8,7 +9,7 @@ export function validateData(data) {
   const tasks = data.tasks.map(x => {
     if (!x || !str(x.title, 200) || !x.title.trim() || (x.notes !== undefined && !str(x.notes, 10000)) || (x.due && (!/^\d{4}-\d{2}-\d{2}$/.test(x.due) || !Number.isFinite(Date.parse(x.due))))) throw new Error('任务标题、备注或日期格式不正确。');
     id(x);
-    return { id:x.id, title:x.title.trim(), notes:x.notes || '', due:x.due || '', priority:['high','normal','low'].includes(x.priority)?x.priority:'normal', completed:x.completed === true, updatedAt:str(x.updatedAt,100)?x.updatedAt:'', version:str(x.version,200)?x.version:'legacy-'+x.id, ...(str(x.conflictOf,200)?{conflictOf:x.conflictOf}:{}) };
+    return { category:CATEGORY_NAMES.includes(x.category)?x.category:DEFAULT_CATEGORY, id:x.id, title:x.title.trim(), notes:x.notes || '', due:x.due || '', priority:['high','normal','low'].includes(x.priority)?x.priority:'normal', completed:x.completed === true, updatedAt:str(x.updatedAt,100)?x.updatedAt:'', version:str(x.version,200)?x.version:'legacy-'+x.id, ...(str(x.conflictOf,200)?{conflictOf:x.conflictOf}:{}) };
   });
   const tombstones = data.tombstones.map(x => { if (!x) throw new Error('删除记录不正确。'); id(x); return {id:x.id,version:str(x.version,200)?x.version:'deleted-'+x.id,updatedAt:str(x.updatedAt,100)?x.updatedAt:''}; });
   return {schemaVersion:1,tasks,tombstones};

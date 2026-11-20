@@ -1,0 +1,14 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {emptyData,validateData,mergeData,sameData,filterTasks} from '../core.js';
+const task=(id,title='任务',version='v1')=>({id,title,notes:'',due:'',priority:'normal',completed:false,updatedAt:'2026-11-20T08:00:00Z',version});
+const data=(tasks=[],tombstones=[])=>({schemaVersion:1,tasks,tombstones});
+test('空仓库与本地新增合并',()=>{const local=data([task('a')]);assert.deepEqual(mergeData(emptyData(),local,emptyData()).data,local);});
+test('两端不同任务的修改都保留',()=>{const a=task('a'),b=task('b');const local=data([task('a','本地','v2'),b]),remote=data([a,task('b','远端','v3')]);const out=mergeData(data([a,b]),local,remote);assert.equal(out.conflicts,0);assert.deepEqual(out.data.tasks.map(x=>x.title),['本地','远端']);});
+test('同一任务并发修改保留冲突副本',()=>{let n=0;const out=mergeData(data([task('a')]),data([task('a','本地','l')]),data([task('a','远端','r')]),()=>`new${++n}`);assert.equal(out.conflicts,1);assert.equal(out.data.tasks.length,2);assert.equal(out.data.tasks[0].title,'远端');assert.equal(out.data.tasks[1].conflictOf,'a');});
+test('删除与另一端未修改合并后保持删除',()=>{const deleted=data([],[{id:'a',version:'d',updatedAt:''}]);assert.deepEqual(mergeData(data([task('a')]),deleted,data([task('a')])).data,deleted);});
+test('删除与并发编辑时保留编辑副本',()=>{let n=0;const out=mergeData(data([task('a')]),data([],[{id:'a',version:'d',updatedAt:''}]),data([task('a','新内容','v2')]),()=>`new${++n}`);assert.equal(out.conflicts,1);assert.equal(out.data.tombstones[0].id,'a');assert.equal(out.data.tasks[0].title,'新内容（冲突副本）');});
+test('同步期间继续编辑的内容保留并处于待上传状态',()=>{const snapshot=data([task('a')]),uploaded=data([task('a'),task('b')]),current=data([task('a','继续编辑','v3')]);const out=mergeData(snapshot,current,uploaded).data;assert.equal(out.tasks[0].title,'继续编辑');assert.equal(out.tasks.length,2);assert.equal(sameData(out,uploaded),false);});
+test('兼容初始空数据并拒绝重复编号和损坏数据',()=>{assert.deepEqual(validateData(emptyData()),emptyData());assert.throws(()=>validateData(data([task('a'),task('a')])));assert.throws(()=>validateData({schemaVersion:2,tasks:[],tombstones:[]}));assert.throws(()=>validateData(data([task('a','')])));});
+test('排序不影响数据相等判断',()=>{assert.equal(sameData(data([task('a'),task('b')]),data([task('b'),task('a')])),true);});
+test('今日包括逾期，完成任务仅出现在完成视图',()=>{const tasks=[{...task('a'),due:'2026-11-19'},{...task('b'),due:'2026-11-20'},{...task('c'),due:'2026-11-21'},{...task('d'),completed:true}];assert.deepEqual(filterTasks(tasks,{view:'today',today:'2026-11-20'}).map(x=>x.id),['a','b']);assert.deepEqual(filterTasks(tasks,{view:'completed'}).map(x=>x.id),['d']);});
