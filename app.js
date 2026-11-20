@@ -162,7 +162,7 @@ async function exportBackup(){
   const saved=await read(),metas=[...new Map(saved.data.records.filter(record=>record.attachment).map(record=>[record.attachment.id,record.attachment])).values()];
   if(metas.reduce((size,meta)=>size+meta.size,0)>44*1024*1024)throw new Error('附件总量超过完整 JSON 备份的 44 MB 上限，请分别下载文件，并保留私有仓库备份。');
   const assets=[];for(const meta of metas){const asset=await getAsset(meta);assets.push({...meta,base64:base64Bytes(new Uint8Array(await asset.blob.arrayBuffer()))});}
-  const blob=new Blob([JSON.stringify({format:'workbench-backup-v2',data:saved.data,assets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`工作台备份-${localDate()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const blob=new Blob([JSON.stringify({format:'workbench-backup-v2',data:saved.data,assets},null,2)],{type:'application/json'});if(blob.size>64*1024*1024)throw new Error('完整备份超过 64 MB，请分别下载附件，并保留私有仓库副本。');const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`工作台备份-${localDate()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 async function importBackup(event){
   try{
