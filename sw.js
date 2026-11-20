@@ -1,0 +1,10 @@
+const CACHE='workbench-v1';
+const FILES=['./','./index.html','./style.css','./app.js','./core.js','./icon.svg','./manifest.webmanifest'];
+self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);for(const path of FILES){const response=await fetch(new URL(path,self.location.href),{cache:'reload',redirect:'error'});if(!response.ok || (path.endsWith('.js')&&!/(javascript|ecmascript)/i.test(response.headers.get('content-type')||'')))throw new Error('缓存应用资源失败');await cache.put(new URL(path,self.location.href),response);}await self.skipWaiting();})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('workbench-')&&key!==CACHE)await caches.delete(key);await self.clients.claim();})()));
+self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin)return;
+  const path=url.pathname, asset=FILES.some(file=>new URL(file,self.location.href).pathname===path);
+  if(!asset && event.request.mode!=='navigate')return;
+  event.respondWith((async()=>{try{const response=await fetch(event.request);if(response.ok&&!response.redirected){const cache=await caches.open(CACHE);await cache.put(event.request,response.clone());}return response;}catch{const cached=await caches.match(event.request);if(cached)return cached;if(event.request.mode==='navigate'){const index=await caches.match(new URL('./index.html',self.location.href));if(index)return index;}return Response.error();}})());
+});
+self.addEventListener('message',event=>{if(event.data==='CACHE_STATUS')event.waitUntil((async()=>{const cache=await caches.open(CACHE), present=await Promise.all(FILES.map(path=>cache.match(new URL(path,self.location.href))));event.ports[0]?.postMessage({ready:present.every(Boolean)});})());});
