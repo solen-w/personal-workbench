@@ -1,17 +1,20 @@
+import {createModuleView} from './module-view.js';
+import {validateAttachment,FILE_LIMIT} from './module-core.js';
 import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js';
 import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
-let activeCategory=DEFAULT_CATEGORY, profileDraft='', authenticated=false;
+let activeCategory=DEFAULT_CATEGORY, profileDraft='', authenticated=false, workspaceModules;
 let toastTimer; const channel='BroadcastChannel' in window ? new BroadcastChannel('workbench-data') : null;
 const fresh=()=>({data:emptyData(),base:emptyData(),repo:'solen-w/personal-workbench-data',lastSync:null,revision:0});
 const localDate=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 function toast(message,error=false){$('toast').textContent=message;$('toast').classList.toggle('error',error);$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),error?7000:4000);}
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('personal-workbench',1);req.onupgradeneeded=()=>req.result.createObjectStore('documents');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(new Error('本地存储无法打开，请检查浏览器是否允许此网站保存数据。'));});}
-function read(){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('state');req.onsuccess=()=>resolve(req.result||fresh());req.onerror=()=>reject(new Error('读取本地数据失败。'));});}
+function read(){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('state');req.onsuccess=()=>resolve(normalizeState(req.result||fresh()));req.onerror=()=>reject(new Error('读取本地数据失败。'));});}
 // 在同一事务内读取和修改，避免多个标签页用旧数据互相覆盖。
-function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=req.result||fresh();change(next);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
+function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
+function normalizeState(saved){saved.data=validateData(saved.data);saved.base=validateData(saved.base);return saved;}
 const run=fn=>async event=>{try{await fn(event);}catch(error){toast(error.message||'操作失败，请重试。',true);}};
 function render(){
   if(!state)return;
@@ -46,6 +49,7 @@ function render(){
   $('save-status').textContent='已保存在本地';
   $('sync-status').textContent=syncing?'正在同步…':state.lastSync?`上次同步 ${new Date(state.lastSync).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}${sameData(state.data,state.base)?'':' · 有待同步修改'}`:sameData(state.data,state.base)?'尚未同步':'有待同步修改';
   $('sync-button').disabled=syncing;
+  workspaceModules?.render(activeCategory,state.data);
 }
 function network(){const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
 function openTask(task=null){editing=task?structuredClone(task):null;$('task-dialog-title').textContent=task?'编辑任务':'新建任务';$('task-title').value=task?.title||'';$('task-notes').value=task?.notes||'';$('task-due').value=task?.due||'';$('task-priority').value=task?.priority||'normal';$('task-category').value=task?.category||activeCategory;$('task-dialog').showModal();$('task-title').focus();}
@@ -59,16 +63,16 @@ async function saveTask(values,original){
   });
   if(conflict)toast('其他标签页已修改此任务，已将本次编辑另存为冲突副本。');
 }
-const githubURL=repo=>`https://api.github.com/repos/${repo}/contents/data/tasks.json`;
-async function request(repo,method='GET',body){
+const githubURL=(repo,path='data/tasks.json')=>`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+async function request(repo,method='GET',body,path='data/tasks.json',raw=false){
   const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),25000);
   try{
-    return await fetch(githubURL(repo),{method,headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:controller.signal,redirect:'error',credentials:'omit'});
+    return await fetch(githubURL(repo,path),{method,headers:{Accept:raw?'application/vnd.github.raw+json':method==='GET'?'application/vnd.github.object+json':'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:controller.signal,redirect:'error',credentials:'omit'});
   }catch(e){if(e.name==='AbortError')throw new Error('同步超时，本地修改已保留。');throw new Error('无法连接 GitHub，本地修改已保留，请检查网络后重试。');}
   finally{clearTimeout(timeout);}
 }
 function httpError(status){return new Error(status===401?'令牌无效或已过期，请重新设置。':status===403?'GitHub 拒绝访问：请检查令牌写入权限或稍后重试。':status===404?'找不到数据文件：请检查仓库名、令牌的仓库访问范围及 data/tasks.json。':`GitHub 同步失败（HTTP ${status}），本地修改已保留。`);}
-function encode(data){const bytes=new TextEncoder().encode(JSON.stringify(data,null,2)+'\n');if(bytes.length>900000)throw new Error('同步文件超过首版支持的 900 KB，请先导出备份并减少备注或任务数量。');let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
+function encode(data){const bytes=new TextEncoder().encode(JSON.stringify(data,null,2)+'\n');if(bytes.length>8*1024*1024)throw new Error('内容数据超过 8 MB，请先导出备份并减少长篇内容。');let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
 async function sync(){
   if(!authenticated)throw new Error('请先登录。');
   if(syncing)return;if(!token){openSettings();$('settings-message').textContent='输入专用令牌后，再点击顶部“同步”。';$('token-input').focus();return;}
@@ -76,13 +80,14 @@ async function sync(){
   syncing=true;render();
   try{
     const snapshot=structuredClone(await read()), repo=snapshot.repo;let merged,conflicts=0,success=false;
+    await uploadAssets(snapshot.data,repo);
     for(let attempt=0;attempt<3;attempt++){
       const response=await request(repo);if(!response.ok)throw httpError(response.status);
-      const file=await response.json();if(file.encoding!=='base64'||typeof file.content!=='string'||file.size>900000||typeof file.sha!=='string')throw new Error('远端任务文件过大或格式不受支持。');
-      let remote;try{remote=validateData(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0)))));}catch(e){throw new Error('远端数据无法读取：'+e.message);}
+      const file=await response.json();if(file.size>8*1024*1024||typeof file.sha!=='string')throw new Error('远端内容文件过大或格式不正确。');
+      let remote;try{if(file.encoding==='base64'&&typeof file.content==='string'){remote=validateData(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0)))));}else{const raw=await request(repo,'GET',undefined,'data/tasks.json',true);if(!raw.ok)throw httpError(raw.status);remote=validateData(await raw.json());}}catch(e){throw new Error('远端数据无法读取：'+e.message);}
       const result=mergeData(snapshot.base,snapshot.data,remote);merged=result.data;conflicts=result.conflicts;
       if(sameData(merged,remote)){success=true;break;}
-      const put=await request(repo,'PUT',{message:'同步个人工作台任务',content:encode(merged),sha:file.sha});
+      const put=await request(repo,'PUT',{message:'同步个人工作台内容',content:encode(merged),sha:file.sha});
       if(put.status===409||put.status===422)continue;
       if(!put.ok)throw httpError(put.status);success=true;break;
     }
@@ -117,15 +122,59 @@ async function initialize(){
     await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});token=$('token-input').value.trim();$('token-input').value='';$('settings-message').textContent=token?'设置已保存，令牌仅在本次会话使用。':'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
   });
   $('forget-token').onclick=()=>{if(syncing){toast('请等待同步结束。');return;}token='';$('token-input').value='';$('settings-message').textContent='当前令牌已清除。';};
-  $('export-button').onclick=run(async()=>{const saved=await read(), blob=new Blob([JSON.stringify(saved.data,null,2)],{type:'application/json'}), url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download=`工作台备份-${localDate()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+  $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
-  $('import-file').onchange=run(async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>4000000)throw new Error('备份文件不能超过 4 MB。');let data;try{data=validateData(JSON.parse(await file.text()));}catch(error){throw new Error('导入失败：'+error.message);}let conflicts=0;await write(s=>{const merged=mergeData(emptyData(),s.data,data);s.data=merged.data;conflicts=merged.conflicts;});toast(conflicts?`已导入，保留 ${conflicts} 处冲突副本。`:'已导入并合并任务');}finally{e.target.value='';}});
+  $('import-file').onchange=run(importBackup);
+  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
   document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){state=await read();render();network();}}));
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
   $('install-button').onclick=run(async()=>{await installPrompt?.prompt();installPrompt=null;$('install-button').hidden=true;});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
   if('serviceWorker' in navigator){try{const registration=await navigator.serviceWorker.register('./sw.js');await navigator.serviceWorker.ready;const worker=registration.active;if(worker){const channel=new MessageChannel();channel.port1.onmessage=e=>{$('offline-info').textContent=e.data?.ready?'离线页面已缓存。清除网站数据会删除本地任务，请定期导出备份。':'离线页面尚未缓存完成，请联网重新打开。';};worker.postMessage('CACHE_STATUS',[channel.port2]);}}catch{$('offline-info').textContent='当前浏览器未完成离线页面缓存。任务仍在本地保存，离线重新打开页面的能力尚不可用。';}}
+}
+function assetRead(id){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('asset:'+id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(new Error('读取附件失败。'));});}
+function saveAsset(asset){
+  validateAttachment(asset);if(!(asset.blob instanceof Blob)||asset.blob.size!==asset.size)return Promise.reject(new Error('附件内容与信息不一致。'));
+  return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite');tx.objectStore('documents').put(asset,'asset:'+asset.id);tx.oncomplete=()=>resolve(asset);tx.onabort=tx.onerror=()=>reject(new Error('附件保存失败，请检查设备剩余空间。'));});
+}
+async function getAsset(meta,localOnly=false){
+  const cached=await assetRead(meta.id);if(cached)return cached;if(localOnly)return null;
+  if(!token)throw new Error('此文件尚未缓存，请先在“同步与设置”中输入令牌。');if(!navigator.onLine)throw new Error('当前离线，且此设备尚未缓存该文件。');
+  const repo=state.repo,response=await request(repo,'GET',undefined,meta.path,true);if(!response.ok)throw httpError(response.status);
+  const blob=await response.blob();if(blob.size!==meta.size||blob.size>FILE_LIMIT)throw new Error('远端附件大小不正确，请检查私有仓库中的文件。');
+  return saveAsset({...meta,blob:new Blob([blob],{type:meta.type}),uploadedRepos:{[repo]:true}});
+}
+function base64Bytes(bytes){let text='';for(let i=0;i<bytes.length;i+=8192)text+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(text);}
+function fromBase64(text){return Uint8Array.from(atob(text),char=>char.charCodeAt(0));}
+async function gitBlobSha(blob){const head=new TextEncoder().encode(`blob ${blob.size}\0`),bytes=await new Blob([head,blob]).arrayBuffer();return [...new Uint8Array(await crypto.subtle.digest('SHA-1',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
+async function uploadAssets(data,repo){
+  const attachments=[...new Map((data.records||[]).filter(record=>record.attachment).map(record=>[record.attachment.id,record.attachment])).values()];
+  for(const meta of attachments){
+    const asset=await assetRead(meta.id);if(asset?.uploadedRepos?.[repo])continue;
+    if(!asset){const check=await request(repo,'GET',undefined,meta.path);if(!check.ok)throw new Error('缺少附件“'+meta.name+'”，请恢复完整备份或重新选择文件。');const info=await check.json();if(info.size!==meta.size)throw new Error('附件大小不一致，请重新选择文件。');continue;}
+    const response=await request(repo,'PUT',{message:'保存工作台附件',content:base64Bytes(new Uint8Array(await asset.blob.arrayBuffer()))},meta.path);
+    if(!response.ok){if(response.status===422||response.status===409){const check=await request(repo,'GET',undefined,meta.path);if(!check.ok)throw httpError(check.status);const info=await check.json();if(info.sha!==await gitBlobSha(asset.blob))throw new Error('远端附件内容冲突，请重新选择文件后同步。');}else throw httpError(response.status);}
+    asset.uploadedRepos={...asset.uploadedRepos,[repo]:true};await saveAsset(asset);
+  }
+}
+async function exportBackup(){
+  const saved=await read(),metas=[...new Map(saved.data.records.filter(record=>record.attachment).map(record=>[record.attachment.id,record.attachment])).values()];
+  if(metas.reduce((size,meta)=>size+meta.size,0)>44*1024*1024)throw new Error('附件总量超过完整 JSON 备份的 44 MB 上限，请分别下载文件，并保留私有仓库备份。');
+  const assets=[];for(const meta of metas){const asset=await getAsset(meta);assets.push({...meta,base64:base64Bytes(new Uint8Array(await asset.blob.arrayBuffer()))});}
+  const blob=new Blob([JSON.stringify({format:'workbench-backup-v2',data:saved.data,assets},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`工作台备份-${localDate()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+async function importBackup(event){
+  try{
+    const file=event.target.files[0];if(!file)return;if(file.size>64*1024*1024)throw new Error('备份文件不能超过 64 MB。');
+    let parsed,data;try{parsed=JSON.parse(await file.text());data=validateData(parsed.format==='workbench-backup-v2'?parsed.data:parsed);}catch(error){throw new Error('导入失败：'+error.message);}
+    const incoming=[];if(parsed.format==='workbench-backup-v2'){
+      if(!Array.isArray(parsed.assets)||parsed.assets.length>20000)throw new Error('备份附件列表不正确。');
+      const seen=new Set();for(const asset of parsed.assets){const meta=validateAttachment(asset);if(!meta||seen.has(meta.id)||typeof asset.base64!=='string'||asset.base64.length>12*1024*1024)throw new Error('备份附件格式不正确。');seen.add(meta.id);let blob;try{blob=new Blob([fromBase64(asset.base64)],{type:meta.type});}catch{throw new Error('备份附件编码不正确。');}if(blob.size!==meta.size)throw new Error('备份附件大小不一致。');incoming.push({...meta,blob,uploadedRepos:{}});}
+    }
+    for(const asset of incoming){const cached=await assetRead(asset.id);if(cached&&await gitBlobSha(cached.blob)!==await gitBlobSha(asset.blob)){const old=asset.id;asset.id=uid();asset.path='data/assets/'+asset.id;for(const record of data.records)if(record.attachment?.id===old)record.attachment={id:asset.id,path:asset.path,name:asset.name,type:asset.type,size:asset.size};}await saveAsset(asset);}
+    let conflicts=0;await write(saved=>{const result=mergeData(emptyData(),saved.data,data);saved.data=result.data;conflicts=result.conflicts;});toast(conflicts?`已导入，保留 ${conflicts} 处冲突副本。`:'已导入并合并内容');
+  }finally{event.target.value='';}
 }
 function buildNavigation(){
   const nav=document.createDocumentFragment(), options=document.createDocumentFragment();
