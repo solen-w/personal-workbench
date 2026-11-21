@@ -63,15 +63,39 @@ async function saveTask(values,original){
   });
   if(conflict)toast('其他标签页已修改此任务，已将本次编辑另存为冲突副本。');
 }
-const githubURL=(repo,path='data/tasks.json')=>`https://api.github.com/repos/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
-async function request(repo,method='GET',body,path='data/tasks.json',raw=false){
+const githubURL=(repo,path='data/tasks.json')=>`https://api.github.com/repos/${repo}`+(path===null?'':`/contents/${path.split('/').map(encodeURIComponent).join('/')}`);
+async function request(repo,method='GET',body,path='data/tasks.json',raw=false,accessToken=token){
   const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),25000);
   try{
-    return await fetch(githubURL(repo,path),{method,headers:{Accept:raw?'application/vnd.github.raw+json':method==='GET'?'application/vnd.github.object+json':'application/vnd.github+json',Authorization:'Bearer '+token,'X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:controller.signal,redirect:'error',credentials:'omit'});
+    return await fetch(githubURL(repo,path),{method,headers:{Accept:raw?'application/vnd.github.raw+json':method==='GET'&&path!==null?'application/vnd.github.object+json':'application/vnd.github+json',Authorization:'Bearer '+accessToken,'X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:controller.signal,redirect:'error',credentials:'omit'});
   }catch(e){if(e.name==='AbortError')throw new Error('同步超时，本地修改已保留。');throw new Error('无法连接 GitHub，本地修改已保留，请检查网络后重试。');}
   finally{clearTimeout(timeout);}
 }
-function httpError(status){return new Error(status===401?'令牌无效或已过期，请重新设置。':status===403?'GitHub 拒绝访问：请检查令牌写入权限或稍后重试。':status===404?'找不到数据文件：请检查仓库名、令牌的仓库访问范围及 data/tasks.json。':`GitHub 同步失败（HTTP ${status}），本地修改已保留。`);}
+function httpError(status){return new Error(status===401?'令牌无效或已过期，请重新设置。':status===403?'GitHub 拒绝访问：请检查令牌的 Contents 读写权限或稍后重试。':status===404?'当前令牌无法读取目标资源。请在“同步与设置”中点击“检查连接”。':`GitHub 同步失败（HTTP ${status}），本地修改已保留。`);}
+function validRepo(repo){return /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/.test(repo);}
+async function ensurePrivateRepo(repo,accessToken=token){
+  if(!validRepo(repo))throw new Error('数据仓库格式应为“用户名/仓库名”。');
+  const response=await request(repo,'GET',undefined,null,false,accessToken);
+  if(response.status===404)throw new Error(`当前令牌无法访问 ${repo}。请确认仓库填写正确，并在该令牌的 Repository access 中选中此仓库。`);
+  if(!response.ok)throw httpError(response.status);
+  const info=await response.json();if(info.private!==true)throw new Error(`“${repo}”不是私有数据仓库。请填写 solen-w/personal-workbench-data，避免把个人内容上传到公开网页仓库。`);
+  return info;
+}
+async function dataAccessError(repo,accessToken=token){
+  const root=await request(repo,'GET',undefined,'',false,accessToken);
+  if(root.status===404||root.status===403)return new Error('可以识别私有仓库，但不能读取内容。请为该令牌设置 Repository permissions → Contents → Read and write，并保存。');
+  if(!root.ok)return httpError(root.status);
+  return new Error(`已能读取 ${repo}，但默认分支没有 data/tasks.json。请确认使用的是 solen-w/personal-workbench-data，并检查文件路径。`);
+}
+async function checkConnection(){
+  if(syncing)throw new Error('请等待当前同步结束。');
+  const repo=$('repo-input').value.trim(),accessToken=$('token-input').value.trim()||token;
+  if(!accessToken)throw new Error('请先输入专用访问令牌。');
+  const button=$('check-connection');button.disabled=true;$('settings-message').textContent='正在检查…';
+  try{await ensurePrivateRepo(repo,accessToken);const response=await request(repo,'GET',undefined,'data/tasks.json',false,accessToken);if(response.status===404)throw await dataAccessError(repo,accessToken);if(!response.ok)throw httpError(response.status);const file=await response.json();if(typeof file.sha!=='string')throw new Error('数据文件格式不正确。');$('settings-message').textContent='连接正常，可以读取私有数据文件。点击“保存设置”后同步；写入权限会在同步时验证。';}
+  catch(error){$('settings-message').textContent=error.message;throw error;}
+  finally{button.disabled=false;}
+}
 function encode(data){const bytes=new TextEncoder().encode(JSON.stringify(data,null,2)+'\n');if(bytes.length>8*1024*1024)throw new Error('内容数据超过 8 MB，请先导出备份并减少长篇内容。');let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
 async function sync(){
   if(!authenticated)throw new Error('请先登录。');
@@ -80,12 +104,14 @@ async function sync(){
   syncing=true;render();
   try{
     const snapshot=structuredClone(await read()), repo=snapshot.repo;let merged,conflicts=0,success=false;
-    await uploadAssets(snapshot.data,repo);
+    await ensurePrivateRepo(repo);
+    let assetsUploaded=false;
     for(let attempt=0;attempt<3;attempt++){
-      const response=await request(repo);if(!response.ok)throw httpError(response.status);
+      const response=await request(repo);if(response.status===404)throw await dataAccessError(repo);if(!response.ok)throw httpError(response.status);
       const file=await response.json();if(file.size>8*1024*1024||typeof file.sha!=='string')throw new Error('远端内容文件过大或格式不正确。');
       let remote;try{if(file.encoding==='base64'&&typeof file.content==='string'){remote=validateData(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(file.content.replace(/\s/g,'')),c=>c.charCodeAt(0)))));}else{const raw=await request(repo,'GET',undefined,'data/tasks.json',true);if(!raw.ok)throw httpError(raw.status);remote=validateData(await raw.json());}}catch(e){throw new Error('远端数据无法读取：'+e.message);}
       const result=mergeData(snapshot.base,snapshot.data,remote);merged=result.data;conflicts=result.conflicts;
+      if(!assetsUploaded){await uploadAssets(snapshot.data,repo);assetsUploaded=true;}
       if(sameData(merged,remote)){success=true;break;}
       const put=await request(repo,'PUT',{message:'同步个人工作台内容',content:encode(merged),sha:file.sha});
       if(put.status===409||put.status===422)continue;
@@ -115,6 +141,7 @@ async function initialize(){
   $('cancel-delete').onclick=()=>$('confirm-dialog').close();
   $('confirm-delete').onclick=run(async()=>{await write(s=>{if(!s.data.tasks.some(t=>t.id===deleting))return;s.data.tasks=s.data.tasks.filter(t=>t.id!==deleting);s.data.tombstones.push({id:deleting,version:uid(),updatedAt:new Date().toISOString()});});$('confirm-dialog').close();});
   $('sync-button').onclick=run(sync);
+  $('check-connection').onclick=run(checkConnection);
   $('settings-form').onsubmit=run(async e=>{
     e.preventDefault();if(syncing)throw new Error('请等待当前同步结束再修改设置。');
     const repo=$('repo-input').value.trim();if(!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/.test(repo))throw new Error('仓库格式应为“用户名/仓库名”。');
