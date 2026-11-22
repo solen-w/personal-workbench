@@ -2,41 +2,39 @@
 export const AUTHORIZED_ACCOUNTS = Object.freeze(["15858672825"]);
 export const NAV_GROUPS = [
   {
-    "title": "命宫定盘",
+    "title": "个人系统",
     "items": [
-      "命宫本元",
-      "履迹平生",
-      "财帛大有"
+      "基础情况",
+      "学工经历",
+      "财务管理"
     ]
   },
   {
-    "title": "天行乾元",
+    "title": "生活系统",
     "items": [
-      "乾元矢志",
-      "恒久不已"
+      "身体跟踪",
+      "习惯养成",
+      "图书管理"
     ]
   },
   {
-    "title": "坤厚载物",
+    "title": "目标系统",
     "items": [
-      "文曲含章",
-      "万象包罗"
+      "运动挑战",
+      "专项攻克",
+      "理论学习"
     ]
   },
   {
-    "title": "果行育德",
+    "title": "文件系统",
     "items": [
-      "继明开卷"
-    ]
-  },
-  {
-    "title": "归藏止静",
-    "items": [
-      "申命行事",
-      "节以制度"
+      "工作要求",
+      "政策法规",
+      "素材收集"
     ]
   }
 ];
+export const MODULE_ALIASES = Object.freeze({"命宫本元": "基础情况", "履迹平生": "学工经历", "财帛大有": "财务管理", "乾元矢志": "专项攻克", "恒久不已": "习惯养成", "文曲含章": "素材收集", "万象包罗": "素材收集", "继明开卷": "图书管理", "申命行事": "工作要求", "节以制度": "政策法规"});
 export const CATEGORY_NAMES = Object.freeze(NAV_GROUPS.flatMap(group => group.items));
 export const DEFAULT_CATEGORY = CATEGORY_NAMES[0];
 export function isAuthorizedAccount(value) { return AUTHORIZED_ACCOUNTS.includes(String(value).trim()); }
