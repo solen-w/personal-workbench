@@ -1,9 +1,9 @@
-import {workspaceProfile,workspaceRecord} from './workspace-core.js';
-import {validateReading} from './reading-core.js';
-import {createModuleView} from './module-view.js';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261122-appearance-2';
+import {validateReading} from './reading-core.js?v=20261122-appearance-2';
+import {createModuleView} from './module-view.js?v=20261122-appearance-2';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261122-appearance-2';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261122-appearance-2';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261122-appearance-2';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -180,7 +180,7 @@ async function initialize(){
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
   $('install-button').onclick=run(async()=>{await installPrompt?.prompt();installPrompt=null;$('install-button').hidden=true;});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
-  if('serviceWorker' in navigator){try{const registration=await navigator.serviceWorker.register('./sw.js');await navigator.serviceWorker.ready;const worker=registration.active;if(worker){const channel=new MessageChannel();channel.port1.onmessage=e=>{$('offline-info').textContent=e.data?.ready?'离线页面已缓存。清除网站数据会删除本地任务，请定期导出备份。':'离线页面尚未缓存完成，请联网重新打开。';};worker.postMessage('CACHE_STATUS',[channel.port2]);}}catch{$('offline-info').textContent='当前浏览器未完成离线页面缓存。任务仍在本地保存，离线重新打开页面的能力尚不可用。';}}
+  if('serviceWorker' in navigator){let refreshed=false;const updatePage=()=>{if(refreshed)return;if(syncing||document.querySelector('dialog[open]')){setTimeout(updatePage,1000);return;}refreshed=true;window.location.reload();};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(navigator.serviceWorker.controller)updatePage();});try{const registration=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});registration.update().catch(()=>{});await navigator.serviceWorker.ready;const worker=registration.active;if(worker){const channel=new MessageChannel();channel.port1.onmessage=e=>{$('offline-info').textContent=e.data?.ready?'离线页面已缓存。清除网站数据会删除本地任务，请定期导出备份。':'离线页面尚未缓存完成，请联网重新打开。';};worker.postMessage('CACHE_STATUS',[channel.port2]);}}catch{$('offline-info').textContent='当前浏览器未完成离线页面缓存。任务仍在本地保存，离线重新打开页面的能力尚不可用。';}}
 }
 function assetRead(id){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('asset:'+id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(new Error('读取附件失败。'));});}
 function saveAsset(asset){
@@ -290,6 +290,6 @@ function bindAccountAndProfile(){
       const url=URL.createObjectURL(file);try{const image=new Image();image.src=url;await image.decode();const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const context=canvas.getContext('2d');const side=Math.min(image.naturalWidth,image.naturalHeight);if(!side||!context)throw new Error('图片无法读取。');context.fillStyle='#ffffff';context.fillRect(0,0,256,256);context.drawImage(image,(image.naturalWidth-side)/2,(image.naturalHeight-side)/2,side,side,0,0,256,256);profileDraft=canvas.toDataURL('image/jpeg',.88);$('profile-preview').src=profileDraft;}finally{URL.revokeObjectURL(url);}
     }finally{event.target.value='';}
   });
-  $('profile-form').onsubmit=run(async event=>{event.preventDefault();const name=$('profile-name').value.trim();if(!name)throw new Error('请输入工作台名称。');if(name.length>20)throw new Error('工作台名称最多 20 个字。');await write(s=>{const existing=workspaceRecord(s.data),now=new Date().toISOString(),record=validateRecord({id:existing?.id||'workspace-profile',module:'基础情况',variant:'workspace-profile',title:name,fields:{name,photo:profileDraft},version:uid(),updatedAt:now,createdAt:existing?.createdAt||now});const index=s.data.records.findIndex(item=>item.id===record.id);if(index<0)s.data.records.push(record);else s.data.records[index]=record;});$('profile-dialog').close();});
+  $('profile-form').onsubmit=run(async event=>{event.preventDefault();const name=$('profile-name').value.trim();if(!name)throw new Error('请输入工作台名称。');if(name.length>20)throw new Error('工作台名称最多 20 个字。');await write(s=>{const existing=workspaceRecord(s.data),now=new Date().toISOString(),record=validateRecord({id:existing?.id||'workspace-profile',module:'基础情况',variant:'workspace-profile',title:name,fields:{name,photo:profileDraft},version:uid(),updatedAt:now,createdAt:existing?.createdAt||now});const index=s.data.records.findIndex(item=>item.id===record.id);if(index<0)s.data.records.push(record);else s.data.records[index]=record;});$('profile-dialog').close();if(token&&navigator.onLine&&!syncing)await sync();else toast(syncing?'已保存，当前同步结束后请再同步一次。':'已保存到本机，请先在本设备点击同步，再到其他设备同步。');});
 }
 initialize().catch(error=>{toast(error.message,true);$('login-error').textContent=error.message;$('save-status').textContent='本地存储不可用';$('empty-title').textContent='本地存储不可用';document.querySelectorAll('button,input,select').forEach(el=>el.disabled=true);});

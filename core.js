@@ -1,5 +1,5 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js';
-import {validateRecord} from './module-core.js';
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261122-appearance-2';
+import {validateRecord} from './module-core.js?v=20261122-appearance-2';
 export const emptyData = () => ({schemaVersion:5,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;

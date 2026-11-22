@@ -1,7 +1,7 @@
-import {validPartialDate} from './workspace-core.js';
-import {MODULE_ALIASES} from './config.js';
-import {FINANCE_FORMS,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js';
-export {amountCents,money,financeTotals} from './finance-core.js';
+import {validPartialDate} from './workspace-core.js?v=20261122-appearance-2';
+import {MODULE_ALIASES} from './config.js?v=20261122-appearance-2';
+import {FINANCE_FORMS,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261122-appearance-2';
+export {amountCents,money,financeTotals} from './finance-core.js?v=20261122-appearance-2';
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 export const MODULES={
   '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','联系方式'),field('email','邮箱','email'),field('occupation','职业'),field('politics','政治面貌'),field('hometown','户籍地'),field('address','住址'),field('intro','个人简介','textarea')]},
