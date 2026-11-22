@@ -1,18 +1,24 @@
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261122-appearance-2';
-import {validateReading} from './reading-core.js?v=20261122-appearance-2';
-import {createModuleView} from './module-view.js?v=20261122-appearance-2';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261122-appearance-2';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261122-appearance-2';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261122-appearance-2';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261122-remember-token-1';
+import {validateReading} from './reading-core.js?v=20261122-remember-token-1';
+import {createModuleView} from './module-view.js?v=20261122-remember-token-1';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261122-remember-token-1';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261122-remember-token-1';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261122-remember-token-1';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
+let rememberToken=true;
 let activeCategory=DEFAULT_CATEGORY, profileDraft='', authenticated=false, workspaceModules;
 let toastTimer; const channel='BroadcastChannel' in window ? new BroadcastChannel('workbench-data') : null;
 const fresh=()=>({data:emptyData(),base:emptyData(),repo:'solen-w/personal-workbench-data',lastSync:null,revision:0});
 const localDate=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 function toast(message,error=false){$('toast').textContent=message;$('toast').classList.toggle('error',error);$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),error?7000:4000);}
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open('personal-workbench',1);req.onupgradeneeded=()=>req.result.createObjectStore('documents');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(new Error('本地存储无法打开，请检查浏览器是否允许此网站保存数据。'));});}
+// 凭据单独保存在本设备，不能放入 state、同步内容或备份。
+function readCredential(repo){return new Promise((resolve,reject)=>{const request=db.transaction('documents').objectStore('documents').get('credential:'+repo);request.onsuccess=()=>{const value=request.result;resolve({remember:value?.remember!==false,token:value?.repo===repo&&value.remember===true&&typeof value.token==='string'&&value.token.length<=4096?value.token:''});};request.onerror=()=>reject(new Error('读取此设备保存的令牌失败。'));});}
+function saveCredential(repo,value,remember){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite');tx.objectStore('documents').put({repo,remember,token:remember?value:''},'credential:'+repo);tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(new Error('无法保存此设备的令牌，请检查浏览器存储权限。'));});}
+async function restoreCredential(){const saved=await readCredential(state.repo);token=saved.token;rememberToken=saved.remember;}
+async function refreshLocalState(){const next=await read(),changed=next.repo!==state.repo;state=next;if(changed){token='';await restoreCredential();}render();}
 function read(){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('state');req.onsuccess=()=>resolve(normalizeState(req.result||fresh()));req.onerror=()=>reject(new Error('读取本地数据失败。'));});}
 // 在同一事务内读取和修改，避免多个标签页用旧数据互相覆盖。
 function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
@@ -62,7 +68,7 @@ function render(){
 }
 function network(){const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
 function openTask(task=null){editing=task?structuredClone(task):null;$('task-dialog-title').textContent=task?'编辑任务':'新建任务';$('task-title').value=task?.title||'';$('task-notes').value=task?.notes||'';$('task-due').value=task?.due||'';$('task-priority').value=task?.priority||'normal';$('task-category').value=task?.category||activeCategory;$('task-dialog').showModal();$('task-title').focus();}
-function openSettings(){$('repo-input').value=state.repo;$('token-input').value=token;$('settings-message').textContent='';$('settings-dialog').showModal();}
+function openSettings(){$('repo-input').value=state.repo;$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('remember-token').checked=rememberToken;$('settings-message').textContent='';$('settings-dialog').showModal();}
 async function saveTask(values,original){
   let conflict=false;
   await write(s=>{
@@ -98,7 +104,7 @@ async function dataAccessError(repo,accessToken=token){
 }
 async function checkConnection(){
   if(syncing)throw new Error('请等待当前同步结束。');
-  const repo=$('repo-input').value.trim(),accessToken=$('token-input').value.trim()||token;
+  const repo=$('repo-input').value.trim(),accessToken=$('token-input').value.trim()||(repo===state.repo?token:(await readCredential(repo)).token);
   if(!accessToken)throw new Error('请先输入专用访问令牌。');
   const button=$('check-connection');button.disabled=true;$('settings-message').textContent='正在检查…';
   try{await ensurePrivateRepo(repo,accessToken);const response=await request(repo,'GET',undefined,'data/tasks.json',false,accessToken);if(response.status===404)throw await dataAccessError(repo,accessToken);if(!response.ok)throw httpError(response.status);const file=await response.json();if(typeof file.sha!=='string')throw new Error('数据文件格式不正确。');$('settings-message').textContent='连接正常，可以读取私有数据文件。点击“保存设置”后同步；写入权限会在同步时验证。';}
@@ -149,9 +155,9 @@ async function refreshReading(){
 }
 async function initialize(){
   buildNavigation();
-  db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);render();network();
+  db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();render();network();
   bindAccountAndProfile();
-  channel && (channel.onmessage=run(async()=>{state=await read();render();}));
+  channel && (channel.onmessage=run(refreshLocalState));
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;render();});
   document.querySelectorAll('[data-priority]').forEach(el=>el.onclick=()=>{priority=el.dataset.priority;render();});
   document.querySelectorAll('[data-close]').forEach(el=>el.onclick=()=>$(el.dataset.close).close());
@@ -168,15 +174,15 @@ async function initialize(){
     e.preventDefault();if(syncing)throw new Error('请等待当前同步结束再修改设置。');
     const repo=$('repo-input').value.trim();if(!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/.test(repo))throw new Error('仓库格式应为“用户名/仓库名”。');
     if(repo!==state.repo && !confirm('切换仓库将把当前本地任务合并到新仓库。是否继续？'))return;
-    await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});token=$('token-input').value.trim();$('token-input').value='';$('settings-message').textContent=token?'设置已保存，令牌仅在本次会话使用。':'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
+    const entered=$('token-input').value.trim(),saved=await readCredential(repo),nextToken=entered||(repo===state.repo?token:saved.token),remember=$('remember-token').checked;if(nextToken.length>4096)throw new Error('令牌格式不正确。');if(repo!==state.repo)token='';await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});await saveCredential(repo,nextToken,remember);token=nextToken;rememberToken=remember;$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('settings-message').textContent=token?(remember?'令牌已保存在此设备，刷新后自动使用。':'令牌仅本次使用，不保存在此设备。'):'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
   });
-  $('forget-token').onclick=()=>{if(syncing){toast('请等待同步结束。');return;}token='';$('token-input').value='';$('settings-message').textContent='当前令牌已清除。';};
+  $('forget-token').onclick=run(async()=>{if(syncing){toast('请等待同步结束。');return;}await saveCredential(state.repo,'',true);token='';rememberToken=true;$('remember-token').checked=true;$('token-input').value='';$('token-input').placeholder='输入你已创建的细粒度令牌';$('settings-message').textContent='此设备保存的令牌已清除。';});
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
   workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
-  document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){state=await read();render();network();}}));
+  document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){await refreshLocalState();network();}}));
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
   $('install-button').onclick=run(async()=>{await installPrompt?.prompt();installPrompt=null;$('install-button').hidden=true;});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
@@ -259,11 +265,12 @@ function setAuthenticated(value){
 function bindAccountAndProfile(){
   let remembered=false;try{remembered=sessionStorage.getItem('workbench-authorized-session-v2')==='active';}catch{}
   setAuthenticated(remembered);
-  $('login-form').onsubmit=event=>{
+  $('login-form').onsubmit=run(async event=>{
     event.preventDefault();if(!isAuthorizedAccount($('login-account').value)){$('login-error').textContent='账号未获授权';$('login-account').setAttribute('aria-invalid','true');return;}
+    await restoreCredential();
     try{sessionStorage.setItem('workbench-authorized-session-v2','active');}catch{}
     $('login-account').removeAttribute('aria-invalid');setAuthenticated(true);
-  };
+  });
   $('login-account').oninput=()=>{$('login-error').textContent='';$('login-account').removeAttribute('aria-invalid');};
   $('logout-button').onclick=()=>{
     if(syncing){toast('请等待同步结束再退出。');return;}

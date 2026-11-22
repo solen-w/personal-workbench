@@ -1,8 +1,8 @@
-import {createReadingView} from './reading-view.js?v=20261122-appearance-2';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261122-appearance-2';
-import {FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261122-appearance-2';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261122-appearance-2';
-import {uid} from './core.js?v=20261122-appearance-2';
+import {createReadingView} from './reading-view.js?v=20261122-remember-token-1';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261122-remember-token-1';
+import {FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261122-remember-token-1';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261122-remember-token-1';
+import {uid} from './core.js?v=20261122-remember-token-1';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
