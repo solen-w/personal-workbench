@@ -1,3 +1,4 @@
+import {createReadingView} from './reading-view.js';
 import {FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js';
 import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js';
 import {uid} from './core.js';
@@ -8,6 +9,7 @@ function meta(card,label,value){if(!value)return;const row=element('div','record
 function preview(text,max=160){return text.length>max?text.slice(0,max)+'…':text;}
 function bytes(size){return size<1024*1024?`${Math.ceil(size/1024)} KB`:`${(size/1024/1024).toFixed(1)} MB`;}
 export function createModuleView(api){
+  const readingView=createReadingView(api);
   let moduleName='',activeVariant='base',financeWeek=mondayOf(localDay()),query='',filter='',month='',original=null,draftAttachment=null,epoch=0,urls=[];
   const safe=fn=>async event=>{try{await fn(event);}catch(error){api.toast(error.message||'操作失败',true);}};
   const allRecords=()=>api.state().data.records||[];
@@ -111,8 +113,9 @@ export function createModuleView(api){
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'ledger':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
     const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
+    readingView.render(name==='图书管理');
     renderSubnav();$('finance-weekbar').hidden=name!=='财务管理';$('finance-week').value=financeWeek;$('finance-week-range').textContent=financeWeek+' 至 '+addDays(financeWeek,6);$('module-export').hidden=!['基础情况','学工经历'].includes(name);$('new-task').hidden=def.kind==='analysis';
-    $('module-kind').textContent=def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;
+    $('module-kind').textContent=name==='图书管理'?'个人书目':def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;
     const select=$('module-filter'),selectField=def.fields.find(field=>field.key==='status'||field.key==='kind');select.replaceChildren();const all=element('option','','全部');all.value='';select.append(all);
     if(selectField)for(const option of selectField.options){const node=element('option','',option);node.value=option;select.append(node);}select.value=filter;select.hidden=!selectField;
     $('module-month').hidden=true;

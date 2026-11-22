@@ -1,5 +1,5 @@
-const CACHE='workbench-pages-v5';
-const FILES=['./','./index.html','./style.css','./layout.css','./modules.css','./app.js','./core.js','./finance-core.js','./module-core.js','./module-view.js','./config.js','./icon.svg','./manifest.webmanifest'];
+const CACHE='workbench-pages-v6';
+const FILES=['./','./index.html','./style.css','./layout.css','./modules.css','./reading.css','./reading-core.js','./reading-view.js','./app.js','./core.js','./finance-core.js','./module-core.js','./module-view.js','./config.js','./icon.svg','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);for(const path of FILES){const response=await fetch(new URL(path,self.location.href),{cache:'reload',redirect:'error'});if(!response.ok || (path.endsWith('.js')&&!/(javascript|ecmascript)/i.test(response.headers.get('content-type')||'')))throw new Error('缓存应用资源失败');await cache.put(new URL(path,self.location.href),response);}await self.skipWaiting();})()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('workbench-')&&key!==CACHE)await caches.delete(key);await self.clients.claim();})()));
 self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin)return;

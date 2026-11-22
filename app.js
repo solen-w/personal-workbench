@@ -1,3 +1,4 @@
+import {validateReading} from './reading-core.js';
 import {createModuleView} from './module-view.js';
 import {validateAttachment,FILE_LIMIT} from './module-core.js';
 import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js';
@@ -125,6 +126,19 @@ async function sync(){
     toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
   }finally{syncing=false;render();}
 }
+async function refreshReading(){
+  if(!authenticated)throw new Error('请先登录。');
+  if(!token)throw new Error('请先在同步与设置中填写 GitHub 专用令牌。');
+  if(!navigator.onLine)throw new Error('当前离线，可查看上次缓存的阅读数据。');
+  const repo=state.repo;await ensurePrivateRepo(repo);
+  const response=await request(repo,'GET',undefined,'data/weread.json',true);
+  if(response.status===404)throw new Error('尚无阅读快照，请先在连接配置中运行微信读书同步；若已运行成功，请检查令牌的仓库访问范围与 Contents 权限。');
+  if(!response.ok)throw httpError(response.status);
+  const text=await response.text();if(text.length>8*1024*1024)throw new Error('阅读数据超过大小限制。');
+  const report=validateReading(JSON.parse(text));
+  if(!authenticated||state.repo!==repo)throw new Error('登录状态或数据仓库已变化，请重新读取。');
+  await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新读取。');next.readingReport={repo,data:report};});
+}
 async function initialize(){
   buildNavigation();
   db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);render();network();
@@ -152,7 +166,7 @@ async function initialize(){
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
-  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,syncStatus:()=>$('sync-status').textContent});render();
+  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
   document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){state=await read();render();network();}}));
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
