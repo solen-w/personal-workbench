@@ -1,9 +1,28 @@
-import {validateReading,duration,heatmapDays,chinaDay} from './reading-core.js';
+import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId} from './reading-core.js';
+import {validateRecord} from './module-core.js';
+import {uid} from './core.js';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
 const button=(text,action)=>{const el=node('button','button',text);el.type='button';el.onclick=action;return el;};
 const link=(text,url)=>{const el=node('a','button',text);el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
 export function createReadingView(api){
   const root=document.getElementById('weread-panel');let year=Number(chinaDay().slice(0,4)),query='',filter='阅读中与已读',busy=false,visible=false;
+  let editing=null,saving=false;
+  const titleDialog=document.getElementById('reading-title-dialog'),titleInput=document.getElementById('reading-title-input'),titleError=document.getElementById('reading-title-error');
+  function editTitle(book){editing={book,repo:api.state().repo,original:readingTitleRecord(api.state().data.records,book.id)};titleInput.value=displayReadingBook(book,api.state().data.records).title;titleError.textContent='';titleDialog.showModal();titleInput.focus();titleInput.select();}
+  async function saveTitle(restore=false){
+    if(!editing||saving)return;const pending=editing,title=restore?'':titleInput.value.trim();
+    if(!restore&&(!title||title.length>200)){titleError.textContent='请输入 1–200 字的书名。';return;}
+    saving=true;document.getElementById('reading-title-save').disabled=true;document.getElementById('reading-title-reset').disabled=true;
+    try{const id=await readingTitleId(pending.book.id);await api.write(state=>{
+      if(state.repo!==pending.repo)throw new Error('数据仓库已变化，请重新打开修改书名。');
+      const current=readingTitleRecord(state.data.records,pending.book.id);
+      if(current?.version!==pending.original?.version)throw new Error('书名已在另一处修改，请重新打开后编辑。');
+      const now=new Date().toISOString(),record=validateRecord({id:current?.id||id,module:'图书管理',variant:'reading-title',title:(title||pending.book.title).slice(0,200),fields:{bookId:pending.book.id,customTitle:title},version:uid(),updatedAt:now,createdAt:current?.createdAt||now});
+      const index=state.data.records.findIndex(item=>item.id===record.id);if(index<0)state.data.records.push(record);else state.data.records[index]=record;
+    });titleDialog.close();editing=null;api.toast(restore?'已恢复原书名':'书名已保存');}catch(error){titleError.textContent=error.message;}finally{saving=false;document.getElementById('reading-title-save').disabled=false;document.getElementById('reading-title-reset').disabled=false;}
+  }
+  document.getElementById('reading-title-form').onsubmit=event=>{event.preventDefault();return saveTitle();};
+  document.getElementById('reading-title-reset').onclick=()=>saveTitle(true);
   function configure(){
     const dialog=document.getElementById('weread-dialog'),body=document.getElementById('weread-setup');body.replaceChildren();
     const base='https://github.com/'+api.state().repo;
@@ -28,8 +47,8 @@ export function createReadingView(api){
     const legend=node('div','heat-legend');for(const [level,label] of [['unknown','未返回'],['zero','0分钟'],['one','不足30分钟'],['two','30–59分钟'],['three','1–2小时'],['four','2小时以上']]){const item=node('span');item.append(node('i','heat-cell '+level),document.createTextNode(label));legend.append(item);}heat.append(legend);const selected=node('p','heat-selected','点击日期查看时长');selected.id='heat-selected';heat.append(selected);root.append(heat);
     const wall=node('section','reading-wall'),tools=node('div','reading-heading'),title=node('h3','','书籍画板'),controls=node('div','reading-controls'),search=node('input');search.type='search';search.placeholder='搜索书名或作者';search.setAttribute('aria-label','搜索微信读书书籍');search.value=query;
     const status=node('select');status.setAttribute('aria-label','筛选书籍');for(const value of ['阅读中与已读','全部书架','在读','已读','在听','未读']){const option=node('option','',value);option.value=value;status.append(option);}status.value=filter;controls.append(search,status);tools.append(title,controls);wall.append(tools);const board=node('div','book-board');
-    function drawBooks(){board.replaceChildren();const books=report.books.filter(book=>(filter==='全部书架'||filter==='阅读中与已读'?filter==='全部书架'||book.status!=='未读':book.status===filter)&&(book.title+' '+book.author).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>b.readDate.localeCompare(a.readDate));title.textContent='书籍画板 · '+books.length;
-      for(const book of books){const card=node('article','book-tile'),cover=node('div','book-cover');if(book.cover){const img=node('img');img.src=book.cover;img.alt=book.title;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=()=>cover.replaceChildren(node('span','',book.title));cover.append(img);}else cover.append(node('span','',book.title));card.append(cover,node('h4','',book.title),node('p','book-author',book.author),node('span','record-tag',book.kind+' · '+book.status));if(book.link)card.append(link('打开阅读',book.link));board.append(card);}if(!books.length)board.append(node('p','reading-empty','暂无匹配书籍'));}
+    function drawBooks(){board.replaceChildren();const books=report.books.map(book=>displayReadingBook(book,api.state().data.records)).filter(book=>(filter==='全部书架'||filter==='阅读中与已读'?filter==='全部书架'||book.status!=='未读':book.status===filter)&&(book.title+' '+book.sourceTitle+' '+book.author).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>b.readDate.localeCompare(a.readDate));title.textContent='书籍画板 · '+books.length;
+      for(const book of books){const card=node('article','book-tile'),cover=node('div','book-cover');if(book.cover){const img=node('img');img.src=book.cover;img.alt=book.title;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=()=>cover.replaceChildren(node('span','',book.title));cover.append(img);}else cover.append(node('span','',book.title));card.append(cover,node('h4','',book.title),node('p','book-author',book.author),node('span','record-tag',book.kind+' · '+book.status));const actions=node('div','book-tile-actions');actions.append(button('修改书名',()=>editTitle(report.books.find(item=>item.id===book.id))));if(book.link)actions.append(link('打开阅读',book.link));card.append(actions);board.append(card);}if(!books.length)board.append(node('p','reading-empty','暂无匹配书籍'));}
     search.oninput=()=>{query=search.value;drawBooks();};status.onchange=()=>{filter=status.value;drawBooks();};drawBooks();wall.append(board);root.append(wall);
   }
   return {render,configure};

@@ -112,7 +112,7 @@ export function createModuleView(api){
   }
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'ledger':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
-    const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
+    const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&record.variant!=='reading-title'),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
     readingView.render(name==='图书管理');
     renderSubnav();$('finance-weekbar').hidden=name!=='财务管理';$('finance-week').value=financeWeek;$('finance-week-range').textContent=financeWeek+' 至 '+addDays(financeWeek,6);$('module-export').hidden=!['基础情况','学工经历'].includes(name);$('new-task').hidden=def.kind==='analysis';
     $('module-kind').textContent=name==='图书管理'?'个人书目':def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;

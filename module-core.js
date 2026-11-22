@@ -17,7 +17,8 @@ export const MODULES={
   '理论学习':{kind:'theory',label:'理论学习',action:'新增学习',titleLabel:'学习主题',fields:[field('source','教材或课程'),field('url','学习链接','url'),field('status','状态','select',{options:['进行中','已完成','已暂停']}),field('target','学习总量','number',{min:1,required:true}),field('current','已完成数量','number',{min:0}),field('unit','单位'),field('due','计划完成日期','date'),field('notes','学习笔记','textarea',{max:100000})]}
 };
 export const MATERIAL_FORMS={text:MODULES['素材收集'],image:{kind:'image',label:'图片素材',action:'添加图片',titleLabel:'图片名称',attachment:'image',fields:[field('tags','标签'),field('source','来源'),field('note','说明','textarea')]},file:{kind:'workfile',label:'文件素材',action:'添加素材文件',titleLabel:'素材名称',attachment:'file',fields:[field('category','分类'),field('date','日期','date'),field('url','素材链接','url'),field('note','备注','textarea')]}};
-export function getDefinition(name,variant){return name==='财务管理'?FINANCE_FORMS[variant||'ledger']:name==='素材收集'?MATERIAL_FORMS[variant||'text']:MODULES[name];}
+const READING_TITLE={kind:'reading-title',fields:[field('bookId','书籍编号','text',{required:true,max:200}),field('customTitle','自定义书名','text',{max:200})]};
+export function getDefinition(name,variant){return name==='图书管理'&&variant==='reading-title'?READING_TITLE:name==='财务管理'?FINANCE_FORMS[variant||'ledger']:name==='素材收集'?MATERIAL_FORMS[variant||'text']:MODULES[name];}
 export function normalizeModule(value){const old=value.module,module=MODULE_ALIASES[old]||old;return {...value,module,variant:value.variant||(module==='财务管理'?'ledger':module==='素材收集'?(old==='万象包罗'?'image':'text'):'base')};}
 export const FILE_LIMIT=8*1024*1024;
 export function progress(record){const target=Number(record.fields.target||record.fields.total||0),current=Number(record.fields.current||0);return target>0?Math.max(0,Math.min(100,Math.round(current/target*100))):0;}

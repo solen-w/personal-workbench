@@ -1,4 +1,7 @@
 const DAY=86400000;
+export function readingTitleRecord(records,bookId){return records.filter(record=>record.module==='图书管理'&&record.variant==='reading-title'&&record.fields.bookId===bookId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||b.version.localeCompare(a.version)||b.id.localeCompare(a.id))[0]||null;}
+export function displayReadingBook(book,records){const custom=readingTitleRecord(records,book.id)?.fields.customTitle;return {...book,sourceTitle:book.title,title:custom||book.title};}
+export async function readingTitleId(bookId){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(bookId));return 'reading-title:'+Array.from(new Uint8Array(bytes),value=>value.toString(16).padStart(2,'0')).join('');}
 export const chinaDay=(date=new Date())=>new Date(date.getTime()+8*3600000).toISOString().slice(0,10);
 export function duration(seconds){if(seconds===null||seconds===undefined)return '—';return Math.floor(seconds/3600)+'小时'+Math.floor(seconds%3600/60)+'分钟';}
 export function safeReadingURL(value){try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:'';}catch{return '';}}
