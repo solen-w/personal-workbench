@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {emptyData,validateData,mergeData,sameData,filterTasks} from '../core.js';
 const task=(id,title='任务',version='v1')=>({id,title,notes:'',due:'',priority:'normal',completed:false,updatedAt:'2026-11-20T08:00:00Z',version});
-const data=(tasks=[],tombstones=[])=>({schemaVersion:4,tasks,tombstones,records:[],recordTombstones:[]});
+const data=(tasks=[],tombstones=[])=>({schemaVersion:5,tasks,tombstones,records:[],recordTombstones:[]});
 test('空仓库与本地新增合并',()=>{const local=data([task('a')]);assert.deepEqual(mergeData(emptyData(),local,emptyData()).data,local);});
 test('两端不同任务的修改都保留',()=>{const a=task('a'),b=task('b');const local=data([task('a','本地','v2'),b]),remote=data([a,task('b','远端','v3')]);const out=mergeData(data([a,b]),local,remote);assert.equal(out.conflicts,0);assert.deepEqual(out.data.tasks.map(x=>x.title),['本地','远端']);});
 test('同一任务并发修改保留冲突副本',()=>{let n=0;const out=mergeData(data([task('a')]),data([task('a','本地','l')]),data([task('a','远端','r')]),()=>`new${++n}`);assert.equal(out.conflicts,1);assert.equal(out.data.tasks.length,2);assert.equal(out.data.tasks[0].title,'远端');assert.equal(out.data.tasks[1].conflictOf,'a');});

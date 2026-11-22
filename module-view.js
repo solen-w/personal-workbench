@@ -1,4 +1,5 @@
 import {createReadingView} from './reading-view.js';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js';
 import {FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js';
 import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js';
 import {uid} from './core.js';
@@ -8,12 +9,17 @@ function button(text,action,className='button'){const node=element('button',clas
 function meta(card,label,value){if(!value)return;const row=element('div','record-meta');row.append(element('span','',label),element('span','',value));card.append(row);}
 function preview(text,max=160){return text.length>max?text.slice(0,max)+'…':text;}
 function bytes(size){return size<1024*1024?`${Math.ceil(size/1024)} KB`:`${(size/1024/1024).toFixed(1)} MB`;}
+function partialDateControl(value,key){
+  const input=document.createElement('input');input.type='hidden';const controls=element('div','partial-date-control'),month=document.createElement('input'),day=document.createElement('select');month.type='month';month.id='record-month-'+key;month.setAttribute('aria-label',(key==='start'?'开始':'结束')+'年月');day.id='record-day-'+key;day.setAttribute('aria-label',(key==='start'?'开始':'结束')+'日（可不选）');month.value=value.slice(0,7);
+  function fill(selected=''){day.replaceChildren();const empty=element('option','','不指定日');empty.value='';day.append(empty);if(month.value){const [year,m]=month.value.split('-').map(Number),count=new Date(Date.UTC(year,m,0)).getUTCDate();for(let n=1;n<=count;n++){const option=element('option','',n+'日');option.value=String(n).padStart(2,'0');day.append(option);}}day.value=[...day.options].some(item=>item.value===selected)?selected:'';day.disabled=!month.value;}
+  const update=()=>{input.value=month.value+(day.value?'-'+day.value:'');};fill(value.slice(8,10));month.onchange=()=>{fill(day.value);update();};day.onchange=update;controls.append(month,day);return {input,controls};
+}
 export function createModuleView(api){
   const readingView=createReadingView(api);
   let moduleName='',activeVariant='base',financeWeek=mondayOf(localDay()),query='',filter='',month='',original=null,draftAttachment=null,epoch=0,urls=[];
   const safe=fn=>async event=>{try{await fn(event);}catch(error){api.toast(error.message||'操作失败',true);}};
   const allRecords=()=>api.state().data.records||[];
-  const selected=()=>allRecords().filter(record=>record.module===moduleName);
+  const selected=()=>allRecords().filter(record=>record.module===moduleName&&!['reading-title','workspace-profile'].includes(record.variant));
   const definition=()=>getDefinition(moduleName,activeVariant);
   const accountName=value=>{const record=allRecords().find(item=>item.module==='财务管理'&&financeVariant(item)==='account'&&item.id===value);return record?.title||(/^[0-9a-f-]{36}$/i.test(value||'')?'已删除账户':value);};
   function cleanup(){urls.forEach(URL.revokeObjectURL);urls=[];}
@@ -34,7 +40,8 @@ export function createModuleView(api){
     const def=definition();$('module-dialog-title').textContent=record?'编辑'+def.label:def.action;$('module-record-title-label').textContent=def.titleLabel;$('module-record-title').value=record?.title||(moduleName==='身体跟踪'?'身体记录 '+localDay():moduleName==='财务管理'&&activeVariant==='budget'?'每周固定预算':moduleName==='财务管理'&&activeVariant==='recovery'?'结余回收':'');
     const fragment=document.createDocumentFragment();
     for(const field of def.fields){const label=element('label','module-field',field.label);let input;
-      if(field.type==='textarea'){input=document.createElement('textarea');input.rows=field.key==='content'?9:4;}
+      if(field.type==='partialdate'){const control=partialDateControl(record?.fields[field.key]||'',field.key);input=control.input;label.append(control.controls);}
+      else if(field.type==='textarea'){input=document.createElement('textarea');input.rows=field.key==='content'?9:4;}
       else if(field.type==='account'){input=document.createElement('select');const empty=element('option','','不关联账户');empty.value='';input.append(empty);for(const account of allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account')){const option=element('option','',account.title+(account.fields.status==='已停用'?'（已停用）':''));option.value=account.id;input.append(option);}const old=record?.fields[field.key];if(old&&![...input.options].some(option=>option.value===old)){const option=element('option','',old);option.value=old;input.append(option);}}
       else if(field.type==='select'){input=document.createElement('select');for(const value of field.options){const option=element('option','',value);option.value=value;input.append(option);}}
       else{input=document.createElement('input');input.type=field.type==='money'?'text':field.type==='decimal'?'number':field.type;input.autocomplete='off';if(field.type==='money'){input.inputMode='decimal';input.placeholder='0.00';}if(field.type==='number'||field.type==='decimal'){input.step=field.type==='decimal'?'0.'+'0'.repeat((field.precision||2)-1)+'1':'1';input.min=field.min??0;if(field.max!==undefined)input.max=field.max;}}
@@ -57,7 +64,7 @@ export function createModuleView(api){
   function showDetail(record){
     $('detail-title').textContent=record.title;const content=$('detail-content');content.replaceChildren();
     for(const field of getDefinition(record.module,record.variant).fields){const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
-      if(field.type==='url'){const link=element('a','record-link',value);link.href=value;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}else section.append(element('div','detail-text',field.type==='account'?accountName(value):value));content.append(section);
+      if(field.type==='url'){const link=element('a','record-link',value);link.href=value;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}else section.append(element('div','detail-text',field.type==='account'?accountName(value):field.type==='partialdate'?displayPartialDate(value):value));content.append(section);
     }
     if(record.attachment)content.append(button('下载文件',safe(()=>openAttachment(record))));
     if(getDefinition(record.module,record.variant).kind==='text')content.append(button('复制正文',safe(async()=>{await navigator.clipboard.writeText(record.fields.content);api.toast('已复制正文');})));
@@ -112,9 +119,11 @@ export function createModuleView(api){
   }
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'ledger':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
-    const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&record.variant!=='reading-title'),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
+    const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&!['reading-title','workspace-profile'].includes(record.variant)),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
     readingView.render(name==='图书管理');
+    document.querySelector('.module-workspace').hidden=name==='图书管理';
     renderSubnav();$('finance-weekbar').hidden=name!=='财务管理';$('finance-week').value=financeWeek;$('finance-week-range').textContent=financeWeek+' 至 '+addDays(financeWeek,6);$('module-export').hidden=!['基础情况','学工经历'].includes(name);$('new-task').hidden=def.kind==='analysis';
+    if(name==='图书管理')$('new-task').hidden=true;
     $('module-kind').textContent=name==='图书管理'?'个人书目':def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;
     const select=$('module-filter'),selectField=def.fields.find(field=>field.key==='status'||field.key==='kind');select.replaceChildren();const all=element('option','','全部');all.value='';select.append(all);
     if(selectField)for(const option of selectField.options){const node=element('option','',option);node.value=option;select.append(node);}select.value=filter;select.hidden=!selectField;
@@ -126,7 +135,7 @@ export function createModuleView(api){
       if(name==='财务管理'&&activeVariant==='recovery')return record.fields.weekStart===financeWeek;
       return true;
     });
-    visible.sort((a,b)=>def.kind==='experience'?(b.fields.start||'').localeCompare(a.fields.start||''):b.updatedAt.localeCompare(a.updatedAt));
+    visible.sort(def.kind==='experience'?experienceOrder:(a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     $('module-count').textContent=visible.length+' 项';
     const stats=$('module-stats');stats.replaceChildren();stats.hidden=false;
     if(name==='财务管理'){renderFinanceStats(stats,moduleRecords);}
@@ -135,6 +144,7 @@ export function createModuleView(api){
     else if(def.kind==='habit'){const days=weekDays(),today=localDay();stats.append(stat('习惯',records.length),stat('今日已打卡',records.filter(record=>record.checkins.includes(today)).length),stat('本周打卡',records.reduce((count,record)=>count+record.checkins.filter(day=>days.includes(day)).length,0)));}
     else if(def.kind==='book')stats.append(stat('想读',records.filter(record=>record.fields.status==='想读').length),stat('在读',records.filter(record=>record.fields.status==='在读').length),stat('已读',records.filter(record=>record.fields.status==='已读').length));
     else stats.hidden=true;
+    document.querySelector('.module-panel-heading').hidden=def.kind==='profile';
     $('module-searchbar').hidden=def.kind==='profile'||def.kind==='analysis';
     renderFinanceAnalysis(moduleRecords);
     const list=$('module-records');list.className='module-records kind-'+def.kind;const fragment=document.createDocumentFragment();
@@ -146,8 +156,8 @@ export function createModuleView(api){
       }
       const title=element('h3','record-title',record.title);card.append(title);
       if(def.kind==='profile'){
-        const photo=element('img','personal-photo');photo.src=api.state().profile?.photo||'./icon.svg';photo.alt='个人头像';card.prepend(photo);const grid=element('div','profile-values');for(const field of def.fields)if(record.fields[field.key])meta(grid,field.label,record.fields[field.key]);card.append(grid);actions(card,record);
-      }else if(def.kind==='experience'){card.append(element('span','record-tag',record.fields.kind||'经历'));meta(card,'时间',`${record.fields.start||'未填写'} — ${record.fields.end||'至今'}`);meta(card,'专业 / 职位',record.fields.role);if(record.fields.details)card.append(element('p','record-excerpt',preview(record.fields.details)));actions(card,record,{detail:true});
+        const photo=element('img','personal-photo');photo.src=workspaceProfile(api.state().data).photo||'./icon.svg';photo.alt='个人头像';const heading=element('div','personal-heading'),identity=element('div','personal-identity');identity.append(title);if(record.fields.email)identity.append(element('p','','邮箱：'+record.fields.email));if(record.fields.phone)identity.append(element('p','','联系方式：'+record.fields.phone));heading.append(photo,identity);card.append(heading);const grid=element('div','profile-values');for(const key of ['gender','birthday','occupation','politics','hometown','address','intro']){const field=def.fields.find(item=>item.key===key),cell=element('div','profile-value'+(['hometown','address','intro'].includes(key)?' full':''));cell.append(element('span','profile-label',field.label),element('div','',key==='birthday'?displayPartialDate(record.fields[key]):record.fields[key]));grid.append(cell);}card.append(grid);actions(card,record);
+      }else if(def.kind==='experience'){const heading=element('div','experience-heading');heading.append(title,element('span','record-tag',record.fields.kind||'经历'));card.append(heading);const line=element('div','experience-line');if(record.fields.start||record.fields.end)line.append(element('span','experience-date',(record.fields.start?displayPartialDate(record.fields.start)+' - ':'')+(record.fields.end?displayPartialDate(record.fields.end):'至今')));if(record.fields.role)line.append(element('span','experience-role',record.fields.role));card.append(line);if(record.fields.details)card.append(element('p','record-excerpt',record.fields.details));actions(card,record,{detail:true});
       }else if(def.kind==='finance'){const amount=element('strong','finance-amount '+(record.fields.kind==='收入'?'income':'expense'),(record.fields.kind==='收入'?'+':'−')+' ¥ '+money(amountCents(record.fields.amount)));card.append(amount);meta(card,'日期',record.fields.date);meta(card,'分类',record.fields.category);meta(card,'账户',accountName(record.fields.account));actions(card,record,{detail:true});
       }else if(def.kind==='goal'||def.kind==='theory'){card.append(element('span','record-tag',record.fields.status));progressBar(card,record);meta(card,'截止',record.fields.due);if(record.fields.plan||record.fields.notes)card.append(element('p','record-excerpt',preview(record.fields.plan||record.fields.notes)));if(record.fields.source)meta(card,'学习来源',record.fields.source);if(record.fields.sport)meta(card,'运动项目',record.fields.sport);actions(card,record,{detail:true});
       }else if(def.kind==='account'||def.kind==='budget'||def.kind==='recovery'||def.kind==='investment'||def.kind==='saving'){renderFinanceCard(card,record);actions(card,record,{detail:true});
@@ -162,6 +172,7 @@ export function createModuleView(api){
     list.replaceChildren(fragment);$('module-empty').hidden=visible.length>0||def.kind==='analysis';$('module-empty-title').textContent=query||filter||month?'没有匹配的内容':'暂无'+def.label;$('module-empty-add').hidden=!!(query||filter||month);$('module-empty-add').textContent=def.action;
     $('legacy-block').hidden=!(data.tasks||[]).some(task=>(task.category||'基础情况')===name);$('legacy-count').textContent=(data.tasks||[]).filter(task=>(task.category||'基础情况')===name).length+' 项';
     $('module-sync-status').textContent=api.syncStatus();
+    if(def.kind==='profile')$('module-sync-status').textContent=syncDate(api.state().lastSync);
   }
   $('module-export').onclick=()=>exportCurrent();
   $('finance-week').onchange=event=>{if(!event.target.value)return;financeWeek=mondayOf(event.target.value);render(moduleName,api.state().data);};$('finance-prev-week').onclick=()=>{financeWeek=addDays(financeWeek,-7);render(moduleName,api.state().data);};$('finance-next-week').onclick=()=>{financeWeek=addDays(financeWeek,7);render(moduleName,api.state().data);};

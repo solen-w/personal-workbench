@@ -1,11 +1,11 @@
-import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId} from './reading-core.js';
+import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId,readingCounts} from './reading-core.js';
 import {validateRecord} from './module-core.js';
 import {uid} from './core.js';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
 const button=(text,action)=>{const el=node('button','button',text);el.type='button';el.onclick=action;return el;};
 const link=(text,url)=>{const el=node('a','button',text);el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
 export function createReadingView(api){
-  const root=document.getElementById('weread-panel');let year=Number(chinaDay().slice(0,4)),query='',filter='阅读中与已读',busy=false,visible=false;
+  const root=document.getElementById('weread-panel');let year=Number(chinaDay().slice(0,4)),query='',filter='阅读中与已读',mode='board',busy=false,visible=false;
   let editing=null,saving=false;
   const titleDialog=document.getElementById('reading-title-dialog'),titleInput=document.getElementById('reading-title-input'),titleError=document.getElementById('reading-title-error');
   function editTitle(book){editing={book,repo:api.state().repo,original:readingTitleRecord(api.state().data.records,book.id)};titleInput.value=displayReadingBook(book,api.state().data.records).title;titleError.textContent='';titleDialog.showModal();titleInput.focus();titleInput.select();}
@@ -45,6 +45,9 @@ export function createReadingView(api){
     const scroll=node('div','heat-scroll'),grid=node('div','heat-grid');grid.setAttribute('aria-label',year+'年每日阅读时长');
     for(const day of heatmapDays(year,entry?.days||{})){if(!day){grid.append(node('span','heat-cell padding'));continue;}const cell=node('button','heat-cell '+(day.future?'future':day.level));cell.type='button';const label=day.date+' · '+(day.future?'未来日期':day.seconds===null?'暂无数据':day.seconds<60?Math.round(day.seconds)+'秒':duration(day.seconds));cell.title=label;cell.setAttribute('aria-label',label);cell.onclick=()=>{document.getElementById('heat-selected').textContent=label;};grid.append(cell);}scroll.append(grid);heat.append(scroll);
     const legend=node('div','heat-legend');for(const [level,label] of [['unknown','未返回'],['zero','0分钟'],['one','不足30分钟'],['two','30–59分钟'],['three','1–2小时'],['four','2小时以上']]){const item=node('span');item.append(node('i','heat-cell '+level),document.createTextNode(label));legend.append(item);}heat.append(legend);const selected=node('p','heat-selected','点击日期查看时长');selected.id='heat-selected';heat.append(selected);root.append(heat);
+    if(entry?.readCountLabel){const annual=node('div','module-stat reading-annual');annual.append(node('span','',year+'年度阅读数量'),node('strong','',entry.readCountLabel));root.append(annual);}
+    const modes=node('div','reading-modes');modes.setAttribute('aria-label','书籍展示模式');for(const [value,label] of [['stats','统计模式'],['board','画板模式']]){const toggle=button(label,()=>{mode=value;render(true);});toggle.classList.toggle('active',mode===value);toggle.setAttribute('aria-pressed',String(mode===value));modes.append(toggle);}root.append(modes);
+    if(mode==='stats'){const statistics=node('section','reading-category-stats');statistics.setAttribute('aria-label','书籍分类统计');for(const item of readingCounts(report.books)){const card=node('div','module-stat');card.append(node('span','',item.label),node('strong','',item.count+' 本'));statistics.append(card);}root.append(statistics);return;}
     const wall=node('section','reading-wall'),tools=node('div','reading-heading'),title=node('h3','','书籍画板'),controls=node('div','reading-controls'),search=node('input');search.type='search';search.placeholder='搜索书名或作者';search.setAttribute('aria-label','搜索微信读书书籍');search.value=query;
     const status=node('select');status.setAttribute('aria-label','筛选书籍');for(const value of ['阅读中与已读','全部书架','在读','已读','在听','未读']){const option=node('option','',value);option.value=value;status.append(option);}status.value=filter;controls.append(search,status);tools.append(title,controls);wall.append(tools);const board=node('div','book-board');
     function drawBooks(){board.replaceChildren();const books=report.books.map(book=>displayReadingBook(book,api.state().data.records)).filter(book=>(filter==='全部书架'||filter==='阅读中与已读'?filter==='全部书架'||book.status!=='未读':book.status===filter)&&(book.title+' '+book.sourceTitle+' '+book.author).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>b.readDate.localeCompare(a.readDate));title.textContent='书籍画板 · '+books.length;

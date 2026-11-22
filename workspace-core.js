@@ -1,0 +1,6 @@
+export function workspaceRecord(data){return (data.records||[]).filter(record=>record.module==='基础情况'&&record.variant==='workspace-profile').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||b.version.localeCompare(a.version)||b.id.localeCompare(a.id))[0]||null;}
+export function workspaceProfile(data){const record=workspaceRecord(data);return {name:record?.fields.name||'我的工作台',photo:record?.fields.photo||''};}
+export function validPartialDate(value){if(!/^\d{4}-\d{2}(?:-\d{2})?$/.test(value))return false;const full=value.length===7?value+'-01':value;return Number.isFinite(Date.parse(full))&&new Date(full).toISOString().slice(0,10)===full;}
+export const displayPartialDate=value=>(value||'').replaceAll('-','.');
+export const experienceOrder=(a,b)=>(a.fields.start?(a.fields.start.length===7?a.fields.start+'-01':a.fields.start):'9999-12-31').localeCompare(b.fields.start?(b.fields.start.length===7?b.fields.start+'-01':b.fields.start):'9999-12-31')||a.id.localeCompare(b.id);
+export function syncDate(value){if(!value)return '尚未同步';const date=new Date(value);if(!Number.isFinite(date.getTime()))return '尚未同步';return '上次同步 '+new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(date).replaceAll('-','/');}

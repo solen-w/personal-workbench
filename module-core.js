@@ -1,10 +1,11 @@
+import {validPartialDate} from './workspace-core.js';
 import {MODULE_ALIASES} from './config.js';
 import {FINANCE_FORMS,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js';
 export {amountCents,money,financeTotals} from './finance-core.js';
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 export const MODULES={
-  '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','电话'),field('email','邮箱','email'),field('location','所在地'),field('occupation','职业'),field('intro','个人简介','textarea')]},
-  '学工经历':{kind:'experience',label:'学习和工作经历',action:'新增经历',titleLabel:'学校或单位',fields:[field('kind','经历类型','select',{options:['学习经历','工作经历']}),field('role','专业或职位'),field('start','开始日期','date'),field('end','结束日期','date'),field('details','经历与收获','textarea')]},
+  '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','联系方式'),field('email','邮箱','email'),field('occupation','职业'),field('politics','政治面貌'),field('hometown','户籍地'),field('address','住址'),field('intro','个人简介','textarea')]},
+  '学工经历':{kind:'experience',label:'学习和工作经历',action:'新增经历',titleLabel:'学校或单位',fields:[field('kind','经历类型','select',{options:['学习经历','工作经历']}),field('role','专业或职位'),field('start','开始日期','partialdate'),field('end','结束日期','partialdate'),field('details','经历与收获','textarea')]},
   '财务管理':FINANCE_FORMS.ledger,
   '专项攻克':{kind:'goal',label:'专项目标',action:'新增目标',titleLabel:'目标名称',fields:[field('status','状态','select',{options:['进行中','已完成','已暂停']}),field('target','目标数值','number',{required:true,min:1}),field('current','当前进度','number',{min:0}),field('unit','单位'),field('due','截止日期','date'),field('plan','行动计划','textarea')]},
   '习惯养成':{kind:'habit',label:'习惯养成',action:'新增习惯',titleLabel:'习惯名称',fields:[field('target','每周目标天数','number',{min:1,max:7,required:true}),field('note','习惯说明','textarea')]},
@@ -17,8 +18,9 @@ export const MODULES={
   '理论学习':{kind:'theory',label:'理论学习',action:'新增学习',titleLabel:'学习主题',fields:[field('source','教材或课程'),field('url','学习链接','url'),field('status','状态','select',{options:['进行中','已完成','已暂停']}),field('target','学习总量','number',{min:1,required:true}),field('current','已完成数量','number',{min:0}),field('unit','单位'),field('due','计划完成日期','date'),field('notes','学习笔记','textarea',{max:100000})]}
 };
 export const MATERIAL_FORMS={text:MODULES['素材收集'],image:{kind:'image',label:'图片素材',action:'添加图片',titleLabel:'图片名称',attachment:'image',fields:[field('tags','标签'),field('source','来源'),field('note','说明','textarea')]},file:{kind:'workfile',label:'文件素材',action:'添加素材文件',titleLabel:'素材名称',attachment:'file',fields:[field('category','分类'),field('date','日期','date'),field('url','素材链接','url'),field('note','备注','textarea')]}};
+const WORKSPACE_PROFILE={kind:'workspace-profile',fields:[field('name','工作台名称','text',{required:true,max:20}),field('photo','头像','textarea',{max:400000})]};
 const READING_TITLE={kind:'reading-title',fields:[field('bookId','书籍编号','text',{required:true,max:200}),field('customTitle','自定义书名','text',{max:200})]};
-export function getDefinition(name,variant){return name==='图书管理'&&variant==='reading-title'?READING_TITLE:name==='财务管理'?FINANCE_FORMS[variant||'ledger']:name==='素材收集'?MATERIAL_FORMS[variant||'text']:MODULES[name];}
+export function getDefinition(name,variant){return name==='基础情况'&&variant==='workspace-profile'?WORKSPACE_PROFILE:name==='图书管理'&&variant==='reading-title'?READING_TITLE:name==='财务管理'?FINANCE_FORMS[variant||'ledger']:name==='素材收集'?MATERIAL_FORMS[variant||'text']:MODULES[name];}
 export function normalizeModule(value){const old=value.module,module=MODULE_ALIASES[old]||old;return {...value,module,variant:value.variant||(module==='财务管理'?'ledger':module==='素材收集'?(old==='万象包罗'?'image':'text'):'base')};}
 export const FILE_LIMIT=8*1024*1024;
 export function progress(record){const target=Number(record.fields.target||record.fields.total||0),current=Number(record.fields.current||0);return target>0?Math.max(0,Math.min(100,Math.round(current/target*100))):0;}
@@ -30,7 +32,7 @@ export function validateAttachment(value){
   return {id:value.id,path:value.path,name:value.name,type:value.type,size:value.size};
 }
 export function validateRecord(value){
-  value=normalizeModule(value||{});const module=getDefinition(value.module,value.variant);
+  value=normalizeModule(value||{});if(value.module==='基础情况'&&value.variant==='base'&&value.fields?.location&&!value.fields.hometown)value={...value,fields:{...value.fields,hometown:value.fields.location}};const module=getDefinition(value.module,value.variant);
   if(!module||typeof value.title!=='string'||!value.title.trim()||value.title.length>200||typeof value.id!=='string'||!value.id||value.id.length>200||typeof value.version!=='string'||!value.version||value.version.length>200)throw new Error('内容记录格式不正确。');
   const fields={};for(const field of module.fields){const v=value.fields?.[field.key]??'';if(typeof v!=='string'||v.length>(field.max||10000))throw new Error(`${field.label}格式不正确。`);if(field.required&&!v.trim())throw new Error(`请填写${field.label}。`);
     if(v&&field.type==='select'&&!field.options.includes(v))throw new Error(`${field.label}选项不正确。`);
@@ -38,14 +40,16 @@ export function validateRecord(value){
     if(v&&field.type==='number'&&(!Number.isFinite(Number(v))||Number(v)<(field.min??0)||Number(v)>(field.max??1e12)||!Number.isInteger(Number(v))))throw new Error(`${field.label}需为有效整数。`);
     if(v&&field.type==='money')amountCents(v);
     if(v&&field.type==='decimal'&&(!new RegExp('^\\d{1,9}(?:\\.\\d{1,'+(field.precision||2)+'})?$').test(v)||!Number.isFinite(Number(v))||Number(v)<(field.min??0)||Number(v)>(field.max??1e9)))throw new Error(field.label+'数值不正确。');
+    if(v&&field.type==='partialdate'&&!validPartialDate(v))throw new Error(field.label+'需为有效年月或日期。');
     if(v&&field.type==='month'&&!/^\d{4}-\d{2}$/.test(v))throw new Error(field.label+'月份不正确。');
     if(v&&field.type==='url'){let url;try{url=new URL(v);}catch{throw new Error('请输入完整的网页链接。');}if(!['https:','http:'].includes(url.protocol))throw new Error('链接仅支持 HTTP 或 HTTPS。');}
     fields[field.key]=v;
   }
-  if(module.kind==='experience'&&fields.start&&fields.end&&fields.end<fields.start)throw new Error('结束日期不能早于开始日期。');
+  if(module.kind==='experience'&&fields.start&&fields.end&&(fields.end.length===7?fields.end+'-31':fields.end)<(fields.start.length===7?fields.start+'-01':fields.start))throw new Error('结束日期不能早于开始日期。');
   if(module.kind==='book'&&fields.total&&Number(fields.current||0)>Number(fields.total))throw new Error('已读页数不能超过总页数。');
   if(value.module==='财务管理'&&['budget','recovery'].includes(value.variant)&&mondayOf(fields.weekStart)!==fields.weekStart)throw new Error('所属预算周请填写周一日期。');
   if(value.module==='财务管理'&&value.variant==='investment')investmentValue({fields});
+  if(module.kind==='workspace-profile'&&fields.photo&&!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(fields.photo))throw new Error('头像格式不正确。');
   const attachment=validateAttachment(value.attachment);if(module.kind==='image'&&(!attachment||!attachment.type.startsWith('image/')))throw new Error('请选择一张图片。');
   const checkins=[...new Set(value.checkins||[])];if(checkins.length>30000||checkins.some(date=>typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)))throw new Error('打卡记录格式不正确。');
   return {id:value.id,module:value.module,variant:value.variant,title:value.title.trim(),fields,attachment,checkins,version:value.version,updatedAt:typeof value.updatedAt==='string'?value.updatedAt:'',createdAt:typeof value.createdAt==='string'?value.createdAt:'',...(typeof value.conflictOf==='string'?{conflictOf:value.conflictOf}:{})};
