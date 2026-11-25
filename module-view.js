@@ -1,11 +1,11 @@
-import {createInvestmentView} from './investment-view.js?v=20261125-investment-1';
-import {investmentTotals,investmentEvents,investmentKind} from './investment-core.js?v=20261125-investment-1';
-import {createAccountView} from './account-view.js?v=20261125-investment-1';
-import {createReadingView} from './reading-view.js?v=20261125-investment-1';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-investment-1';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-investment-1';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-investment-1';
-import {uid} from './core.js?v=20261125-investment-1';
+import {createInvestmentView} from './investment-view.js?v=20261125-investment-2';
+import {investmentTotals,investmentEvents,investmentKind} from './investment-core.js?v=20261125-investment-2';
+import {createAccountView} from './account-view.js?v=20261125-investment-2';
+import {createReadingView} from './reading-view.js?v=20261125-investment-2';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-investment-2';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-investment-2';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-investment-2';
+import {uid} from './core.js?v=20261125-investment-2';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -99,7 +99,7 @@ export function createModuleView(api){
   function renderFinanceStats(container,records){
     const report=weekReport(records,financeWeek),cash=value=>'¥ '+money(value),items=variant=>records.filter(record=>financeVariant(record)===variant);
     if(activeVariant==='account'){const totals=assetTotals(records),debt=stat('负债',cash(totals.debt));debt.append(element('div','debt-ratio','负债率 '+(totals.ratio===null?'—':totals.ratio+'%')));container.append(stat('净资产',cash(totals.net)),stat('总资产',cash(totals.assets)),debt);}
-    else if(activeVariant==='investment'){const totals=investmentTotals(records);container.append(stat('投资总市值','¥ '+money(totals.current)),stat('持仓收益额',totals.change===null?'—':'¥ '+money(totals.change)),stat('持仓收益率',totals.rate===null?'—':totals.rate.toFixed(2)+'%'));}
+    else if(activeVariant==='investment'){const totals=investmentTotals(records),available=records.filter(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&normalizeAccountType(record.fields.kind)==='投资').reduce((sum,account)=>sum+accountCashBalance(account,records),0);container.append(stat('投资总市值','¥ '+money(totals.current)),stat('可用余额',cash(available)),stat('持仓收益额',totals.change===null?'—':'¥ '+money(totals.change)),stat('持仓收益率',totals.rate===null?'—':totals.rate.toFixed(2)+'%'));}
     else if(activeVariant==='saving'){const goals=items('saving'),target=goals.reduce((sum,record)=>sum+amountCents(record.fields.target),0),current=goals.reduce((sum,record)=>sum+amountCents(record.fields.current),0);container.append(stat('目标金额',cash(target)),stat('已存金额',cash(current)),stat('待存金额',cash(Math.max(0,target-current))));}
     else if(activeVariant==='recovery')container.append(stat('支出后结余',report.hasBudget?cash(report.surplus):'未设置预算'),stat('已回收',cash(report.recovered)),stat('可回收结余',report.hasBudget?cash(report.available):'—'));
     else if(activeVariant==='analysis')container.append(stat('实际支出占预算',report.ratio===null?'—':report.ratio+'%'),stat('已回收',cash(report.recovered)),stat('可用结余',report.hasBudget?cash(report.available):'—'));
@@ -150,7 +150,7 @@ export function createModuleView(api){
     if(def.kind==='investment')visible=[];
     visible.sort(def.kind==='experience'?experienceOrder:(a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     $('module-count').textContent=visible.length+' 项';
-    const stats=$('module-stats');stats.replaceChildren();stats.hidden=false;stats.classList.toggle('account-assets-stats',name==='财务管理'&&activeVariant==='account');
+    const stats=$('module-stats');stats.replaceChildren();stats.hidden=false;stats.classList.toggle('investment-assets-stats',name==='财务管理'&&activeVariant==='investment');stats.classList.toggle('account-assets-stats',name==='财务管理'&&activeVariant==='account');
     if(name==='财务管理'){renderFinanceStats(stats,moduleRecords);}
     else if(def.kind==='body'){const byDate=[...records].sort((a,b)=>(b.fields.date||'').localeCompare(a.fields.date||''));const weight=byDate.find(record=>record.fields.weight),sleep=byDate.find(record=>record.fields.sleep);stats.append(stat('最近体重',weight?weight.fields.weight+' kg':'—'),stat('最近睡眠',sleep?sleep.fields.sleep+' 小时':'—'),stat('跟踪记录',records.length));}
     else if(def.kind==='goal'||def.kind==='theory')stats.append(stat('全部目标',records.length),stat('进行中',records.filter(record=>record.fields.status==='进行中').length),stat('已完成',records.filter(record=>record.fields.status==='已完成').length));

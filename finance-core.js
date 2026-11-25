@@ -1,4 +1,4 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition} from './investment-core.js?v=20261125-investment-1';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition} from './investment-core.js?v=20261125-investment-2';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
