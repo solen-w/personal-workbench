@@ -1,12 +1,12 @@
-import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId,readingCounts} from './reading-core.js?v=20261125-accounts-1';
-import {validateRecord} from './module-core.js?v=20261125-accounts-1';
-import {uid} from './core.js?v=20261125-accounts-1';
+import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId,readingCounts} from './reading-core.js?v=20261125-reading-auto-1';
+import {validateRecord} from './module-core.js?v=20261125-reading-auto-1';
+import {uid} from './core.js?v=20261125-reading-auto-1';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
 const button=(text,action)=>{const el=node('button','button',text);el.type='button';el.onclick=action;return el;};
 const link=(text,url)=>{const el=node('a','button',text);el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
 export function createReadingView(api){
   const root=document.getElementById('weread-panel');let year=Number(chinaDay().slice(0,4)),query='',filter='阅读中与已读',mode='board',busy=false,visible=false;
-  let editing=null,saving=false;
+  let editing=null,saving=false,phase='';
   const titleDialog=document.getElementById('reading-title-dialog'),titleInput=document.getElementById('reading-title-input'),titleError=document.getElementById('reading-title-error');
   function editTitle(book){editing={book,repo:api.state().repo,original:readingTitleRecord(api.state().data.records,book.id)};titleInput.value=displayReadingBook(book,api.state().data.records).title;titleError.textContent='';titleDialog.showModal();titleInput.focus();titleInput.select();}
   async function saveTitle(restore=false){
@@ -29,15 +29,14 @@ export function createReadingView(api){
     body.append(node('p','','在私有仓库中配置一次，密钥不会进入网页代码。'));
     const list=node('ol','weread-steps');
     const a=node('li','','新建仓库 Secret，名称填 WEREAD_API_KEY，值填你的微信读书密钥。');a.append(link('填写密钥',base+'/settings/secrets/actions/new'));
-    const b=node('li','','打开“微信读书同步”，点击 Run workflow，再确认运行。热力表年份可留空。');b.append(link('运行同步',base+'/actions/workflows/weread.yml'));
-    const c=node('li','','运行成功后，回到这里点击“读取阅读数据”。');list.append(a,b,c);body.append(list);dialog.showModal();
+    const b=node('li','','回到图书管理点击“更新阅读”即可。之后进入此页会自动检查和更新。');list.append(a,b);body.append(list);dialog.showModal();
   }
-  async function refresh(){if(busy)return;busy=true;render(visible);try{await api.refreshReading();api.toast('阅读数据已读取');}catch(error){api.toast(error.message,true);}finally{busy=false;render(visible);}}
+  async function refresh(force=true){if(busy)return;busy=true;phase='正在检查…';render(visible);try{const result=await api.refreshReading({force,year,onProgress:text=>{phase=text;const status=root.querySelector('.reading-progress');if(status)status.textContent=text;}});if(force&&result?.updated)api.toast('阅读数据已更新');}catch(error){api.toast(error.message,true);}finally{busy=false;phase='';render(visible);}}
   function render(show){
-    visible=show;root.hidden=!show;if(!show)return;root.replaceChildren();
+    const entering=show&&!visible;visible=show;root.hidden=!show;if(!show)return;if(entering&&!busy&&api.canRefreshReading?.())queueMicrotask(()=>{if(visible&&!busy)refresh(false);});root.replaceChildren();
     let report=null;try{if(api.state().readingReport?.repo===api.state().repo)report=validateReading(api.state().readingReport.data);}catch{}
     const heading=node('div','reading-heading'),titles=node('div');titles.append(node('h2','','微信读书'));if(report)titles.append(node('span','reading-updated','更新于 '+new Date(report.updatedAt).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})));
-    const actions=node('div','reading-actions'),refreshButton=button(busy?'正在读取…':'读取阅读数据',refresh);refreshButton.disabled=busy;actions.append(button('连接配置',configure),refreshButton);heading.append(titles,actions);root.append(heading);
+    const actions=node('div','reading-actions'),refreshButton=button(busy?'正在更新…':'更新阅读',()=>refresh(true));refreshButton.disabled=busy;actions.append(button('连接配置',configure),refreshButton);heading.append(titles,actions);root.append(heading);if(busy){const status=node('p','reading-progress',phase);status.setAttribute('role','status');root.append(status);}
     if(!report){root.append(node('p','reading-empty','连接微信读书后，在这里查看阅读时长、热力表和书籍画板。'));return;}
     const years=Object.keys(report.years).sort().reverse();if(!report.years[year])year=Number(years[0]);const entry=report.years[year];
     const stats=node('div','module-stats reading-stats');for(const [label,value] of [['累计阅读 / 收听',duration(report.totalReadSeconds)],[year+'年阅读 / 收听',duration(entry?.totalReadSeconds)],['读过的书籍 / 有声书',report.books.filter(book=>book.status!=='未读').length]]){const card=node('div','module-stat');card.append(node('span','',label),node('strong','',value));stats.append(card);}root.append(stats);

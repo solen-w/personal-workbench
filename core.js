@@ -1,5 +1,5 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-accounts-1';
-import {validateRecord} from './module-core.js?v=20261125-accounts-1';
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-reading-auto-1';
+import {validateRecord} from './module-core.js?v=20261125-reading-auto-1';
 export const emptyData = () => ({schemaVersion:6,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;

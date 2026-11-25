@@ -1,9 +1,10 @@
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-accounts-1';
-import {validateReading} from './reading-core.js?v=20261125-accounts-1';
-import {createModuleView} from './module-view.js?v=20261125-accounts-1';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-accounts-1';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-accounts-1';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-accounts-1';
+import {requestReadingUpdate} from './reading-job.js?v=20261125-reading-auto-1';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-reading-auto-1';
+import {validateReading} from './reading-core.js?v=20261125-reading-auto-1';
+import {createModuleView} from './module-view.js?v=20261125-reading-auto-1';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-reading-auto-1';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-reading-auto-1';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-reading-auto-1';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -140,18 +141,18 @@ async function sync(){
     toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
   }finally{syncing=false;render();}
 }
-async function refreshReading(){
+async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).getUTCFullYear(),onProgress=()=>{}}={}){
   if(!authenticated)throw new Error('请先登录。');
   if(!token)throw new Error('请先在同步与设置中填写 GitHub 专用令牌。');
   if(!navigator.onLine)throw new Error('当前离线，可查看上次缓存的阅读数据。');
-  const repo=state.repo;await ensurePrivateRepo(repo);
-  const response=await request(repo,'GET',undefined,'data/weread.json',true);
-  if(response.status===404)throw new Error('尚无阅读快照，请先在连接配置中运行微信读书同步；若已运行成功，请检查令牌的仓库访问范围与 Contents 权限。');
-  if(!response.ok)throw httpError(response.status);
-  const text=await response.text();if(text.length>8*1024*1024)throw new Error('阅读数据超过大小限制。');
-  const report=validateReading(JSON.parse(text));
-  if(!authenticated||state.repo!==repo)throw new Error('登录状态或数据仓库已变化，请重新读取。');
-  await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新读取。');next.readingReport={repo,data:report};});
+  const repo=state.repo,accessToken=token;
+  const check=()=>{if(!authenticated||state.repo!==repo||token!==accessToken)throw new Error('登录状态或数据仓库已变化，请重新更新。');};
+  await ensurePrivateRepo(repo,accessToken);check();
+  const readSnapshot=async()=>{const response=await request(repo,'GET',undefined,'data/weread.json',true,accessToken);if(response.status===404)return null;if(!response.ok)throw httpError(response.status);const text=await response.text();if(text.length>8*1024*1024)throw new Error('阅读数据超过大小限制。');return validateReading(JSON.parse(text));};
+  if(!force&&!state.readingJob){const cached=await readSnapshot();check();if(cached&&cached.years[year]&&Date.now()-Date.parse(cached.updatedAt)<15*60000){await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化。');next.readingReport={repo,data:cached};});return {updated:false};}}
+  const outcome=await requestReadingUpdate({repo,year,pending:state.readingJob,request:(method,body,path,raw)=>request(repo,method,body,path,raw,accessToken),check,onProgress,onPending:job=>write(next=>{check();if(job)next.readingJob=job;else delete next.readingJob;})});
+  check();onProgress('正在载入新数据…');const report=await readSnapshot();if(!report||!Number.isFinite(Date.parse(outcome.dataUpdatedAt))||Date.parse(report.updatedAt)<Date.parse(outcome.dataUpdatedAt))throw new Error('后台已完成，数据暂未读到，请稍后再次更新；原有数据已保留。');
+  check();await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新更新。');next.readingReport={repo,data:report};delete next.readingJob;});return {updated:true};
 }
 async function initialize(){
   buildNavigation();
@@ -180,7 +181,7 @@ async function initialize(){
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
-  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,syncStatus:()=>$('sync-status').textContent});render();
+  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,canRefreshReading:()=>authenticated&&!!token&&navigator.onLine,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
   document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){await refreshLocalState();network();}}));
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
