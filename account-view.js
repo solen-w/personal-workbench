@@ -1,7 +1,7 @@
-import {investmentCashEnabled} from './investment-core.js?v=20261125-investment-5';
-import {accountCashBalance,accountBalance,accountOperation,annualSavingProgress,financeVariant,normalizeAccountType,money,decimalMoney} from './finance-core.js?v=20261125-investment-5';
-import {validateRecord} from './module-core.js?v=20261125-investment-5';
-import {uid} from './core.js?v=20261125-investment-5';
+import {investmentCashEnabled} from './investment-core.js?v=20261125-investment-6';
+import {accountCashBalance,accountBalance,accountOperation,annualSavingProgress,financeVariant,normalizeAccountType,money,decimalMoney} from './finance-core.js?v=20261125-investment-6';
+import {validateRecord} from './module-core.js?v=20261125-investment-6';
+import {uid} from './core.js?v=20261125-investment-6';
 const $=id=>document.getElementById(id);
 function node(tag,cls,text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;}
 function button(text,action){const el=node('button','button',text);el.type='button';el.onclick=action;return el;}

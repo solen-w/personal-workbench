@@ -1,13 +1,14 @@
-import {ensureInvestmentAccounts} from './finance-core.js?v=20261125-investment-5';
-import {requestMarketUpdate} from './market-job.js?v=20261125-investment-5';
-import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-5';
-import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-5';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-5';
-import {validateReading} from './reading-core.js?v=20261125-investment-5';
-import {createModuleView} from './module-view.js?v=20261125-investment-5';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-5';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-5';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-5';
+import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261125-investment-6';
+import {ensureInvestmentAccounts} from './finance-core.js?v=20261125-investment-6';
+import {requestMarketUpdate} from './market-job.js?v=20261125-investment-6';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-6';
+import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-6';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-6';
+import {validateReading} from './reading-core.js?v=20261125-investment-6';
+import {createModuleView} from './module-view.js?v=20261125-investment-6';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-6';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-6';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-6';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -36,6 +37,7 @@ function normalizeState(saved){
 }
 const run=fn=>async event=>{try{await fn(event);}catch(error){toast(error.message||'操作失败，请重试。',true);}};
 function render(){
+  marketAuto?.update();
   if(!state)return;
   const today=localDate(), tasks=state.data.tasks.filter(x=>(x.category||DEFAULT_CATEGORY)===activeCategory), pending=tasks.filter(x=>!x.completed), done=tasks.length-pending.length, due=pending.filter(x=>x.due&&x.due<=today).length;
   for(const [key,value] of Object.entries({all:pending.length,today:due,upcoming:pending.filter(x=>x.due&&x.due>today).length,completed:done})) $('count-'+key).textContent=value;
@@ -70,7 +72,7 @@ function render(){
   $('sync-button').disabled=syncing;
   workspaceModules?.render(activeCategory,state.data);
 }
-function network(){const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
+function network(){marketAuto?.update();const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
 function openTask(task=null){editing=task?structuredClone(task):null;$('task-dialog-title').textContent=task?'编辑任务':'新建任务';$('task-title').value=task?.title||'';$('task-notes').value=task?.notes||'';$('task-due').value=task?.due||'';$('task-priority').value=task?.priority||'normal';$('task-category').value=task?.category||activeCategory;$('task-dialog').showModal();$('task-title').focus();}
 function openSettings(){$('repo-input').value=state.repo;$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('remember-token').checked=rememberToken;$('settings-message').textContent='';$('settings-dialog').showModal();}
 async function saveTask(values,original){
@@ -157,17 +159,18 @@ async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).ge
   check();onProgress('正在载入新数据…');const report=await readSnapshot();if(!report||!Number.isFinite(Date.parse(outcome.dataUpdatedAt))||Date.parse(report.updatedAt)<Date.parse(outcome.dataUpdatedAt))throw new Error('后台已完成，数据暂未读到，请稍后再次更新；原有数据已保留。');
   check();await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新更新。');next.readingReport={repo,data:report};delete next.readingJob;});return {updated:true};
 }
-let marketUpdating=false;
-async function refreshMarket(symbols,onProgress=()=>{}){
+let marketUpdating=false,marketAuto;
+async function refreshMarket(symbols,onProgress=()=>{},guard=null){
   if(marketUpdating)throw new Error('正在更新行情，请稍候。');if(!authenticated)throw new Error('请先登录。');if(!token)throw new Error('请先在同步与设置中配置 GitHub 令牌。');if(!navigator.onLine)throw new Error('当前离线，原报价和持仓已保留。');
-  marketUpdating=true;const repo=state.repo,accessToken=token,check=()=>{if(!authenticated||state.repo!==repo||token!==accessToken)throw new Error('登录状态或仓库已变化，请重新查询。');};
+  marketUpdating=true;const repo=state.repo,accessToken=token,check=()=>{if(guard&&!guard())throw new Error('自动更新已暂停。');if(!authenticated||state.repo!==repo||token!==accessToken)throw new Error('登录状态或仓库已变化，请重新查询。');};
   try{await ensurePrivateRepo(repo,accessToken);const result=await requestMarketUpdate({repo,symbols,pending:state.marketJob,request:(method,body,path,raw)=>request(repo,method,body,path,raw,accessToken),check,onProgress,onPending:job=>write(next=>{check();if(job)next.marketJob=job;else delete next.marketJob;})});check();let updated=0;
-    await write(next=>{check();const now=new Date().toISOString();for(const quote of result.quotes){quoteKey(quote.kind,quote.code);const id='investment-quote:'+({'股票':'stock','基金':'fund','贵金属':'metal'}[quote.kind])+':'+quote.code,old=next.data.records.find(r=>r.id===id);if(old&&old.fields.asOf>quote.asOf)continue;const record=validateRecord({id,module:'财务管理',variant:'investment-quote',title:String(quote.name||quote.code).slice(0,200),fields:quote,version:uid(),updatedAt:now,createdAt:old?.createdAt||now});if(!old)next.data.records.push(record);else if(old.fields.price!==record.fields.price||old.fields.asOf!==record.fields.asOf)next.data.records[next.data.records.findIndex(r=>r.id===id)]=record;updated++;}next.marketLastRefresh=Date.now();delete next.marketJob;});return {quotes:result.quotes,updated,failed:result.errors?.length||0};
+    await write(next=>{check();const now=new Date().toISOString();for(const quote of result.quotes){quoteKey(quote.kind,quote.code);next.marketAutoStamps??={};next.marketAutoStamps[autoStampKey(repo,quote.kind,quote.code)]=Date.now();const id='investment-quote:'+({'股票':'stock','基金':'fund','贵金属':'metal'}[quote.kind])+':'+quote.code,old=next.data.records.find(r=>r.id===id);if(old&&old.fields.asOf>quote.asOf)continue;const record=validateRecord({id,module:'财务管理',variant:'investment-quote',title:String(quote.name||quote.code).slice(0,200),fields:quote,version:uid(),updatedAt:now,createdAt:old?.createdAt||now});if(!old)next.data.records.push(record);else if(old.fields.price!==record.fields.price||old.fields.asOf!==record.fields.asOf)next.data.records[next.data.records.findIndex(r=>r.id===id)]=record;updated++;}next.marketLastRefresh=Date.now();delete next.marketJob;});return {quotes:result.quotes,updated,failed:result.errors?.length||0};
   }finally{marketUpdating=false;}
 }
 async function initialize(){
   buildNavigation();
   db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();await write(()=>{});render();network();
+  marketAuto=createMarketAutoRefresh({isActive:()=>authenticated&&!!token&&navigator.onLine&&document.visibilityState==='visible',snapshot:()=>({records:state.data.records,repo:state.repo,stamps:state.marketAutoStamps}),refresh:async (symbols,guard)=>{if(marketUpdating||syncing)return;await refreshMarket(symbols,undefined,guard);},setTimer:window.setTimeout.bind(window),clearTimer:window.clearTimeout.bind(window)});
   bindAccountAndProfile();
   channel && (channel.onmessage=run(refreshLocalState));
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;render();});
@@ -186,15 +189,16 @@ async function initialize(){
     e.preventDefault();if(syncing)throw new Error('请等待当前同步结束再修改设置。');
     const repo=$('repo-input').value.trim();if(!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/.test(repo))throw new Error('仓库格式应为“用户名/仓库名”。');
     if(repo!==state.repo && !confirm('切换仓库将把当前本地任务合并到新仓库。是否继续？'))return;
-    const entered=$('token-input').value.trim(),saved=await readCredential(repo),nextToken=entered||(repo===state.repo?token:saved.token),remember=$('remember-token').checked;if(nextToken.length>4096)throw new Error('令牌格式不正确。');if(repo!==state.repo)token='';await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});await saveCredential(repo,nextToken,remember);token=nextToken;rememberToken=remember;$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('settings-message').textContent=token?(remember?'令牌已保存在此设备，刷新后自动使用。':'令牌仅本次使用，不保存在此设备。'):'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
+    const entered=$('token-input').value.trim(),saved=await readCredential(repo),nextToken=entered||(repo===state.repo?token:saved.token),remember=$('remember-token').checked;if(nextToken.length>4096)throw new Error('令牌格式不正确。');if(repo!==state.repo)token='';await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});await saveCredential(repo,nextToken,remember);token=nextToken;rememberToken=remember;marketAuto?.update();$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('settings-message').textContent=token?(remember?'令牌已保存在此设备，刷新后自动使用。':'令牌仅本次使用，不保存在此设备。'):'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
   });
-  $('forget-token').onclick=run(async()=>{if(syncing){toast('请等待同步结束。');return;}await saveCredential(state.repo,'',true);token='';rememberToken=true;$('remember-token').checked=true;$('token-input').value='';$('token-input').placeholder='输入你已创建的细粒度令牌';$('settings-message').textContent='此设备保存的令牌已清除。';});
+  $('forget-token').onclick=run(async()=>{if(syncing){toast('请等待同步结束。');return;}await saveCredential(state.repo,'',true);token='';rememberToken=true;marketAuto?.update();$('remember-token').checked=true;$('token-input').value='';$('token-input').placeholder='输入你已创建的细粒度令牌';$('settings-message').textContent='此设备保存的令牌已清除。';});
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
   workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,refreshMarket,canRefreshReading:()=>authenticated&&!!token&&navigator.onLine,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
-  document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){await refreshLocalState();network();}}));
+  document.addEventListener('visibilitychange',run(async()=>{marketAuto?.update();if(document.visibilityState==='visible'){await refreshLocalState();network();marketAuto?.update();}}));
+  addEventListener('pagehide',()=>marketAuto?.stop());addEventListener('pageshow',()=>marketAuto?.update());
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
   $('install-button').onclick=run(async()=>{await installPrompt?.prompt();installPrompt=null;$('install-button').hidden=true;});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
@@ -270,7 +274,7 @@ function setSidebar(open){
   else{$('sidebar').removeAttribute('role');$('sidebar').removeAttribute('aria-modal');if(wasOpen)$('menu-button').focus();}
 }
 function setAuthenticated(value){
-  authenticated=value;$('app-shell').hidden=!value;$('app-shell').inert=!value;$('login-panel').hidden=value;
+  authenticated=value;marketAuto?.update();$('app-shell').hidden=!value;$('app-shell').inert=!value;$('login-panel').hidden=value;
   if(value){$('login-account').value='';$('login-error').textContent='';$('new-task').focus();}
   else{$('login-account').value='';$('login-account').focus();}
 }
