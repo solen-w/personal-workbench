@@ -1,8 +1,8 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261125-investment-6';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261125-investment-7';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
-export const FINANCE_TABS=[{id:'account',label:'账户管理'},{id:'budget',label:'固定预算'},{id:'recovery',label:'结余回收'},{id:'investment',label:'投资观察'},{id:'analysis',label:'克制分析'},{id:'saving',label:'事项储蓄目标'},{id:'ledger',label:'表盘总览分析'}];
+export const FINANCE_TABS=[{id:'account',label:'账户管理'},{id:'investment',label:'投资观察'},{id:'budget',label:'预算实用'},{id:'ledger',label:'总览统计'},{id:'saving',label:'事项储蓄'}];
 export const FINANCE_FORMS={
   ledger:{kind:'finance',label:'收支明细',action:'记一笔',titleLabel:'收支事项',fields:[f('kind','收支类型','select',{options:['支出','收入']}),f('amount','金额','money',{required:true}),f('category','收支分类'),f('date','日期','date',{required:true}),f('account','账户','account'),f('note','备注','textarea')]},
   account:{kind:'account',label:'账户管理',action:'新增账户',titleLabel:'账户名称',fields:[f('kind','账户类型','select',{options:ACCOUNT_TYPES}),f('opening','期初金额','money'),f('include','总览统计','select',{options:['计入总览','不计入总览']}),f('status','使用状态','select',{options:['使用中','已停用']}),f('note','备注','textarea'),f('investmentKind','投资分类','select',{options:INVESTMENT_ACCOUNT_KINDS,internal:true}),f('enabled','资金账户启用','select',{options:['是','否'],internal:true}),f('configConflicts','待核对的账户设置','textarea',{internal:true,max:10000})]},
@@ -14,7 +14,7 @@ export const FINANCE_FORMS={
   'investment-event':{kind:'investment-event',fields:[f('holdingId','持仓编号','text',{required:true}),f('action','交易操作','select',{options:['trade','apply','confirm','arrive','cancel','fail','resolve','correct'],required:true}),f('orderId','基金申请编号'),f('sequence','顺序','number',{required:true,min:1}),f('data','交易内容','textarea',{required:true,max:10000})]},
   'investment-quote':{kind:'investment-quote',fields:[f('kind','行情类别','select',{options:['股票','基金','贵金属'],required:true}),f('code','代码','text',{required:true}),f('price','报价','decimal',{precision:4,required:true}),f('date','报价日期','date',{required:true}),f('asOf','供应商报价时间','text',{required:true}),f('source','来源','select',{options:['tencent','eastmoney','jdjygold'],required:true})]},
   analysis:{kind:'analysis',label:'克制分析',action:'',titleLabel:'',fields:[]},
-  saving:{kind:'saving',label:'事项储蓄目标',action:'新增事项储蓄目标',titleLabel:'目标名称',fields:[f('target','目标金额','money',{required:true}),f('current','已存金额','money',{required:true}),f('account','关联账户','account'),f('due','目标日期','date'),f('plan','存款计划','textarea')]}
+  saving:{kind:'saving',label:'事项储蓄',action:'新增事项储蓄',titleLabel:'目标名称',fields:[f('target','目标金额','money',{required:true}),f('current','已存金额','money',{required:true}),f('account','关联账户','account'),f('due','目标日期','date'),f('plan','存款计划','textarea')]}
 };
 export const financeVariant=record=>record.variant||'ledger';
 export function signedCents(value){const text=String(value||'0');return text.startsWith('-')?-amountCents(text.slice(1)):amountCents(text);}

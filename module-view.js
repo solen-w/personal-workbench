@@ -1,12 +1,12 @@
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261125-investment-6';
-import {createInvestmentView} from './investment-view.js?v=20261125-investment-6';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261125-investment-6';
-import {createAccountView} from './account-view.js?v=20261125-investment-6';
-import {createReadingView} from './reading-view.js?v=20261125-investment-6';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-investment-6';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-investment-6';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-investment-6';
-import {uid} from './core.js?v=20261125-investment-6';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261125-investment-7';
+import {createInvestmentView} from './investment-view.js?v=20261125-investment-7';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261125-investment-7';
+import {createAccountView} from './account-view.js?v=20261125-investment-7';
+import {createReadingView} from './reading-view.js?v=20261125-investment-7';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-investment-7';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-investment-7';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-investment-7';
+import {uid} from './core.js?v=20261125-investment-7';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -47,7 +47,7 @@ export function createModuleView(api){
     if(record?.variant==='account'&&record.fields.investmentKind){investmentView.settings();return;}
     formVariant=variant;
     original=record?structuredClone(record):null;draftAttachment=record?.attachment||null;
-    const def=editorDefinition();$('module-dialog-title').textContent=record?'编辑'+def.label:def.action;$('module-record-title-label').textContent=def.titleLabel;$('module-record-title').value=record?.title||(variant==='annual-saving'?new Date().getFullYear()+'年度存款目标':moduleName==='身体跟踪'?'身体记录 '+localDay():moduleName==='财务管理'&&activeVariant==='budget'?'每周固定预算':moduleName==='财务管理'&&activeVariant==='recovery'?'结余回收':'');
+    const def=editorDefinition();$('module-dialog-title').textContent=record?'编辑'+def.label:def.action;$('module-record-title-label').textContent=def.titleLabel;$('module-record-title').value=record?.title||(variant==='annual-saving'?new Date().getFullYear()+'年度存款目标':moduleName==='身体跟踪'?'身体记录 '+localDay():moduleName==='财务管理'&&activeVariant==='budget'?'每周固定预算':moduleName==='财务管理'&&variant==='recovery'?'结余回收':'');
     const fragment=document.createDocumentFragment();
     for(const field of def.fields){if(field.internal)continue;const label=element('label','module-field',field.label);let input;
       if(field.type==='partialdate'){const control=partialDateControl(record?.fields[field.key]||'',field.key);input=control.input;label.append(control.controls);}
@@ -108,8 +108,8 @@ export function createModuleView(api){
     else if(activeVariant==='analysis')container.append(stat('实际支出占预算',report.ratio===null?'—':report.ratio+'%'),stat('已回收',cash(report.recovered)),stat('可用结余',report.hasBudget?cash(report.available):'—'));
     else container.append(stat('本周固定预算',report.hasBudget?cash(report.budget):'未设置'),stat('本周实际支出',cash(report.spent)),stat('回收后可用结余',report.hasBudget?cash(report.available):'—'));
   }
-  function renderFinanceAnalysis(records){
-    const panel=$('finance-analysis');panel.replaceChildren();panel.hidden=moduleName!=='财务管理'||!['ledger','analysis'].includes(activeVariant);if(panel.hidden)return;
+  function renderFinanceAnalysis(records,panel=$('finance-analysis')){
+    panel.replaceChildren();panel.hidden=moduleName!=='财务管理'||!(['ledger','analysis'].includes(activeVariant)||(activeVariant==='budget'&&panel.id==='budget-analysis'));if(panel.hidden)return;
     const report=weekReport(records,financeWeek);
     if(activeVariant==='ledger'){
       const summary=element('div','finance-summary');const accounts=records.filter(record=>financeVariant(record)==='account'&&record.fields.include!=='不计入总览');meta(summary,'净资产','¥ '+money(assetTotals(records).net));summary.append(element('h3','','本周收支'),element('p','',`收入 ¥ ${money(financeTotals(report.ledger).income)} · 已回收 ¥ ${money(report.recovered)}`));
@@ -119,6 +119,15 @@ export function createModuleView(api){
     const formula=element('p','finance-formula','可用结余 = 周固定预算 − 实际支出 − 手动回收金额');panel.append(formula);
     const wrapper=element('div','finance-table-wrap'),table=element('table','finance-table'),head=element('thead'),header=element('tr');for(const label of ['预算周','固定预算','实际支出','支出占比','已回收','可用结余'])header.append(element('th','',label));head.append(header);table.append(head);const body=element('tbody');
     for(let offset=0;offset<8;offset++){const rowReport=weekReport(records,addDays(financeWeek,-7*offset)),row=element('tr');for(const value of [rowReport.start,rowReport.hasBudget?money(rowReport.budget):'—',money(rowReport.spent),rowReport.ratio===null?'—':rowReport.ratio+'%',money(rowReport.recovered),rowReport.hasBudget?money(rowReport.available):'—'])row.append(element('td','',value));body.append(row);}table.append(body);wrapper.append(table);panel.append(wrapper);
+  }
+  function renderBudgetWorkspace(records,show){
+    const root=$('budget-panel');root.hidden=!show;root.replaceChildren();if(!show)return;
+    const report=weekReport(records,financeWeek),budgets=records.filter(r=>financeVariant(r)==='budget'&&r.fields.weekStart<=financeWeek).sort((a,b)=>b.fields.weekStart.localeCompare(a.fields.weekStart)||b.updatedAt.localeCompare(a.updatedAt)),current=budgets[0],exact=budgets.find(r=>r.fields.weekStart===financeWeek);
+    function section(title,action,label){const section=element('section','budget-section'),heading=element('div','budget-section-heading');heading.append(element('h2','',title));if(action)heading.append(button(label,action,'button text-button'));section.append(heading);root.append(section);return section;}
+    function recordCard(section,record){const card=element('article','record-card');card.append(element('h3','record-title',record.title));renderFinanceCard(card,record);if(record.fields.note)card.append(element('p','record-excerpt',record.fields.note));actions(card,record,{detail:true});section.append(card);}
+    const budget=section('固定预算',()=>edit(exact||null,'budget'),exact?'编辑本周预算':'设置周预算');budget.id='budget-fixed';if(current)recordCard(budget,current);else budget.append(element('p','budget-empty','未设置周预算'));
+    const recovery=section('结余回收',()=>edit(null,'recovery'),'记录回收');recovery.id='budget-recovery';const recoveries=records.filter(r=>financeVariant(r)==='recovery'&&r.fields.weekStart===financeWeek).sort((a,b)=>b.fields.date.localeCompare(a.fields.date)||b.updatedAt.localeCompare(a.updatedAt));for(const record of recoveries)recordCard(recovery,record);if(!recoveries.length)recovery.append(element('p','budget-empty','本周暂无回收记录'));
+    const analysis=section('克制分析');analysis.classList.add('budget-analysis-section');const stats=element('div','module-stats budget-analysis-stats');stats.append(stat('实际支出占预算',report.ratio===null?'—':report.ratio+'%'),stat('已回收','¥ '+money(report.recovered)),stat('可用结余',report.hasBudget?'¥ '+money(report.available):'—'));analysis.append(stats);const panel=element('div','finance-analysis');panel.id='budget-analysis';analysis.append(panel);renderFinanceAnalysis(records,panel);
   }
   function renderFinanceCard(card,record){
     const fields=record.fields,variant=financeVariant(record),cash=value=>'¥ '+money(value);
@@ -133,13 +142,13 @@ export function createModuleView(api){
     const rows=[[def.titleLabel,...def.fields.map(field=>field.label)],...selected().map(record=>[record.title,...def.fields.map(field=>record.fields[field.key])])];const blob=new Blob(['\ufeff'+rows.map(row=>row.map(escape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);download(url,moduleName+'-'+localDay()+'.csv');setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function render(name,data){
-    if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'ledger':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
+    if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'account':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
     const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&!['reading-title','workspace-profile'].includes(record.variant)),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
-    readingView.render(name==='图书管理');investmentView.render(moduleRecords,name==='财务管理'&&activeVariant==='investment');document.querySelector('.module-panel').hidden=name==='财务管理'&&activeVariant==='investment';
+    readingView.render(name==='图书管理');investmentView.render(moduleRecords,name==='财务管理'&&activeVariant==='investment');document.querySelector('.module-panel').hidden=name==='财务管理'&&['investment','budget'].includes(activeVariant);renderBudgetWorkspace(moduleRecords,name==='财务管理'&&activeVariant==='budget');
     document.querySelector('.module-workspace').hidden=name==='图书管理';
     renderSubnav();$('finance-weekbar').hidden=name!=='财务管理'||!['ledger','budget','recovery','analysis'].includes(activeVariant);$('finance-week').value=financeWeek;$('finance-week-range').textContent=financeWeek+' 至 '+addDays(financeWeek,6);$('module-export').hidden=!['基础情况','学工经历'].includes(name);$('new-task').hidden=def.kind==='analysis';
     if(name==='图书管理')$('new-task').hidden=true;
-    $('module-kind').textContent=name==='图书管理'?'个人书目':def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;
+    $('module-kind').textContent=name==='图书管理'?'个人书目':def.label;$('new-task').textContent=def.kind==='profile'&&records.length?'编辑资料':def.action;if(name==='财务管理'&&activeVariant==='budget')$('new-task').textContent=records.some(r=>r.fields.weekStart===financeWeek)?'编辑本周预算':'设置周预算';
     const select=$('module-filter'),selectField=def.fields.find(field=>field.key==='status'||field.key==='kind');select.replaceChildren();const all=element('option','','全部');all.value='';select.append(all);
     if(selectField)for(const option of selectField.options){const node=element('option','',option);node.value=option;select.append(node);}select.value=filter;select.hidden=!selectField;
     $('module-month').hidden=true;
@@ -195,7 +204,7 @@ export function createModuleView(api){
   $('module-export').onclick=()=>exportCurrent();
   $('finance-week').onchange=event=>{if(!event.target.value)return;financeWeek=mondayOf(event.target.value);render(moduleName,api.state().data);};$('finance-prev-week').onclick=()=>{financeWeek=addDays(financeWeek,-7);render(moduleName,api.state().data);};$('finance-next-week').onclick=()=>{financeWeek=addDays(financeWeek,7);render(moduleName,api.state().data);};
   $('module-query').oninput=event=>{query=event.target.value;render(moduleName,api.state().data);};$('module-filter').onchange=event=>{filter=event.target.value;render(moduleName,api.state().data);};$('module-month').onchange=event=>{month=event.target.value;render(moduleName,api.state().data);};
-  $('module-empty-add').onclick=()=>edit();$('new-task').onclick=()=>edit(definition().kind==='profile'?selected()[0]||null:null);
+  $('module-empty-add').onclick=()=>edit();$('new-task').onclick=()=>edit(moduleName==='财务管理'&&activeVariant==='budget'?allRecords().find(r=>r.module==='财务管理'&&financeVariant(r)==='budget'&&r.fields.weekStart===financeWeek)||null:definition().kind==='profile'?selected()[0]||null:null);
   $('module-form').onsubmit=safe(async event=>{event.preventDefault();const fields={...original?.fields};for(const field of editorDefinition().fields)if(!field.internal)fields[field.key]=$('record-field-'+field.key).value.trim();
     if(editorDefinition().kind==='workfile'&&!draftAttachment&&!fields.url)throw new Error('请选择文件或填写文件链接。');
     if(editorDefinition().kind==='policy'&&!draftAttachment&&!fields.url&&!fields.content)throw new Error('请添加附件、原文链接或政策内容。');

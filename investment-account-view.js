@@ -1,6 +1,6 @@
-import {INVESTMENT_ACCOUNT_KINDS,managedInvestmentAccount,investmentCashEnabled} from './investment-core.js?v=20261125-investment-6';
-import {configureInvestmentAccounts,accountCashBalance,money} from './finance-core.js?v=20261125-investment-6';
-import {validateRecord} from './module-core.js?v=20261125-investment-6';
+import {INVESTMENT_ACCOUNT_KINDS,managedInvestmentAccount,investmentCashEnabled} from './investment-core.js?v=20261125-investment-7';
+import {configureInvestmentAccounts,accountCashBalance,money} from './finance-core.js?v=20261125-investment-7';
+import {validateRecord} from './module-core.js?v=20261125-investment-7';
 const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const signature=records=>JSON.stringify(records.filter(r=>r.module==='财务管理'&&r.variant!=='investment-quote').map(r=>[r.id,r.version]).sort());
 export function createInvestmentAccountView(api){
