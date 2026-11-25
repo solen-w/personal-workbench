@@ -1,14 +1,15 @@
-import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261125-investment-7';
-import {ensureInvestmentAccounts} from './finance-core.js?v=20261125-investment-7';
-import {requestMarketUpdate} from './market-job.js?v=20261125-investment-7';
-import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-7';
-import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-7';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-7';
-import {validateReading} from './reading-core.js?v=20261125-investment-7';
-import {createModuleView} from './module-view.js?v=20261125-investment-7';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-7';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-7';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-7';
+import {createDataAutoSync} from './sync-auto.js?v=20261125-investment-8';
+import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261125-investment-8';
+import {ensureInvestmentAccounts} from './finance-core.js?v=20261125-investment-8';
+import {requestMarketUpdate} from './market-job.js?v=20261125-investment-8';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-8';
+import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-8';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-8';
+import {validateReading} from './reading-core.js?v=20261125-investment-8';
+import {createModuleView} from './module-view.js?v=20261125-investment-8';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-8';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-8';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-8';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -26,7 +27,7 @@ async function restoreCredential(){const saved=await readCredential(state.repo);
 async function refreshLocalState(){const next=await read(),changed=next.repo!==state.repo;state=next;if(changed){token='';await restoreCredential();}render();}
 function read(){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('state');req.onsuccess=()=>resolve(normalizeState(req.result||fresh()));req.onerror=()=>reject(new Error('读取本地数据失败。'));});}
 // 在同一事务内读取和修改，避免多个标签页用旧数据互相覆盖。
-function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.data.records=ensureInvestmentAccounts(next.data.records).map(validateRecord);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
+function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.data.records=ensureInvestmentAccounts(next.data.records).map(validateRecord);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();dataAuto?.changed();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
 function normalizeState(saved){
   saved.data=validateData(saved.data);saved.base=validateData(saved.base);
   if(saved.profile&&!workspaceRecord(saved.data)){
@@ -37,7 +38,7 @@ function normalizeState(saved){
 }
 const run=fn=>async event=>{try{await fn(event);}catch(error){toast(error.message||'操作失败，请重试。',true);}};
 function render(){
-  marketAuto?.update();
+  marketAuto?.update();dataAuto?.update();
   if(!state)return;
   const today=localDate(), tasks=state.data.tasks.filter(x=>(x.category||DEFAULT_CATEGORY)===activeCategory), pending=tasks.filter(x=>!x.completed), done=tasks.length-pending.length, due=pending.filter(x=>x.due&&x.due<=today).length;
   for(const [key,value] of Object.entries({all:pending.length,today:due,upcoming:pending.filter(x=>x.due&&x.due>today).length,completed:done})) $('count-'+key).textContent=value;
@@ -69,10 +70,11 @@ function render(){
   $('empty-add').hidden=!!filtered||view==='completed';$('empty-add').textContent='新建任务';
   $('save-status').textContent='已保存在本地';
   $('sync-status').textContent=syncing?'正在同步…':state.lastSync?`上次同步 ${new Date(state.lastSync).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}${sameData(state.data,state.base)?'':' · 有待同步修改'}`:sameData(state.data,state.base)?'尚未同步':'有待同步修改';
+  if(autoSyncError&&!syncing)$('sync-status').textContent+=' · 自动同步未完成';
   $('sync-button').disabled=syncing;
   workspaceModules?.render(activeCategory,state.data);
 }
-function network(){marketAuto?.update();const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
+function network(){marketAuto?.update();dataAuto?.update();checkAppUpdate();const online=navigator.onLine;$('network-status').textContent=online?'在线':'离线';$('network-status').classList.toggle('offline',!online);}
 function openTask(task=null){editing=task?structuredClone(task):null;$('task-dialog-title').textContent=task?'编辑任务':'新建任务';$('task-title').value=task?.title||'';$('task-notes').value=task?.notes||'';$('task-due').value=task?.due||'';$('task-priority').value=task?.priority||'normal';$('task-category').value=task?.category||activeCategory;$('task-dialog').showModal();$('task-title').focus();}
 function openSettings(){$('repo-input').value=state.repo;$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('remember-token').checked=rememberToken;$('settings-message').textContent='';$('settings-dialog').showModal();}
 async function saveTask(values,original){
@@ -118,7 +120,7 @@ async function checkConnection(){
   finally{button.disabled=false;}
 }
 function encode(data){const bytes=new TextEncoder().encode(JSON.stringify(data,null,2)+'\n');if(bytes.length>8*1024*1024)throw new Error('内容数据超过 8 MB，请先导出备份并减少长篇内容。');let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
-async function sync(){
+async function sync({silent=false}={}){
   if(!authenticated)throw new Error('请先登录。');
   if(syncing)return;if(!token){openSettings();$('settings-message').textContent='输入专用令牌后，再点击顶部“同步”。';$('token-input').focus();return;}
   if(!navigator.onLine)throw new Error('当前处于离线状态，任务会继续保存在本地。');
@@ -143,7 +145,7 @@ async function sync(){
       if(s.repo!==repo)throw new Error('同步期间仓库设置发生变化，请重新同步。');
       const pending=mergeData(snapshot.data,s.data,merged);s.data=pending.data;s.base=merged;s.lastSync=new Date().toISOString();conflicts+=pending.conflicts;
     });
-    toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
+    autoSyncError='';if(!silent)toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
   }finally{syncing=false;render();}
 }
 async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).getUTCFullYear(),onProgress=()=>{}}={}){
@@ -159,7 +161,7 @@ async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).ge
   check();onProgress('正在载入新数据…');const report=await readSnapshot();if(!report||!Number.isFinite(Date.parse(outcome.dataUpdatedAt))||Date.parse(report.updatedAt)<Date.parse(outcome.dataUpdatedAt))throw new Error('后台已完成，数据暂未读到，请稍后再次更新；原有数据已保留。');
   check();await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新更新。');next.readingReport={repo,data:report};delete next.readingJob;});return {updated:true};
 }
-let marketUpdating=false,marketAuto;
+let marketUpdating=false,marketAuto,dataAuto,autoSyncError='',appRegistration,lastAppCheck=0;
 async function refreshMarket(symbols,onProgress=()=>{},guard=null){
   if(marketUpdating)throw new Error('正在更新行情，请稍候。');if(!authenticated)throw new Error('请先登录。');if(!token)throw new Error('请先在同步与设置中配置 GitHub 令牌。');if(!navigator.onLine)throw new Error('当前离线，原报价和持仓已保留。');
   marketUpdating=true;const repo=state.repo,accessToken=token,check=()=>{if(guard&&!guard())throw new Error('自动更新已暂停。');if(!authenticated||state.repo!==repo||token!==accessToken)throw new Error('登录状态或仓库已变化，请重新查询。');};
@@ -167,10 +169,12 @@ async function refreshMarket(symbols,onProgress=()=>{},guard=null){
     await write(next=>{check();const now=new Date().toISOString();for(const quote of result.quotes){quoteKey(quote.kind,quote.code);next.marketAutoStamps??={};next.marketAutoStamps[autoStampKey(repo,quote.kind,quote.code)]=Date.now();const id='investment-quote:'+({'股票':'stock','基金':'fund','贵金属':'metal'}[quote.kind])+':'+quote.code,old=next.data.records.find(r=>r.id===id);if(old&&old.fields.asOf>quote.asOf)continue;const record=validateRecord({id,module:'财务管理',variant:'investment-quote',title:String(quote.name||quote.code).slice(0,200),fields:quote,version:uid(),updatedAt:now,createdAt:old?.createdAt||now});if(!old)next.data.records.push(record);else if(old.fields.price!==record.fields.price||old.fields.asOf!==record.fields.asOf)next.data.records[next.data.records.findIndex(r=>r.id===id)]=record;updated++;}next.marketLastRefresh=Date.now();delete next.marketJob;});return {quotes:result.quotes,updated,failed:result.errors?.length||0};
   }finally{marketUpdating=false;}
 }
+function checkAppUpdate(){if(!navigator.onLine||!appRegistration||Date.now()-lastAppCheck<120000)return;lastAppCheck=Date.now();appRegistration.update().catch(()=>{});}
 async function initialize(){
   buildNavigation();
   db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();await write(()=>{});render();network();
   marketAuto=createMarketAutoRefresh({isActive:()=>authenticated&&!!token&&navigator.onLine&&document.visibilityState==='visible',snapshot:()=>({records:state.data.records,repo:state.repo,stamps:state.marketAutoStamps}),refresh:async (symbols,guard)=>{if(marketUpdating||syncing)return;await refreshMarket(symbols,undefined,guard);},setTimer:window.setTimeout.bind(window),clearTimer:window.clearTimeout.bind(window)});
+  dataAuto=createDataAutoSync({isActive:()=>authenticated&&!!token&&navigator.onLine&&document.visibilityState==='visible',isBusy:()=>syncing,isDirty:()=>!sameData(state.data,state.base),sync:()=>sync({silent:true}),onError:error=>{autoSyncError=error?.message||'';render();},setTimer:window.setTimeout.bind(window),clearTimer:window.clearTimeout.bind(window)});
   bindAccountAndProfile();
   channel && (channel.onmessage=run(refreshLocalState));
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;render();});
@@ -189,20 +193,20 @@ async function initialize(){
     e.preventDefault();if(syncing)throw new Error('请等待当前同步结束再修改设置。');
     const repo=$('repo-input').value.trim();if(!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/.test(repo))throw new Error('仓库格式应为“用户名/仓库名”。');
     if(repo!==state.repo && !confirm('切换仓库将把当前本地任务合并到新仓库。是否继续？'))return;
-    const entered=$('token-input').value.trim(),saved=await readCredential(repo),nextToken=entered||(repo===state.repo?token:saved.token),remember=$('remember-token').checked;if(nextToken.length>4096)throw new Error('令牌格式不正确。');if(repo!==state.repo)token='';await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});await saveCredential(repo,nextToken,remember);token=nextToken;rememberToken=remember;marketAuto?.update();$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('settings-message').textContent=token?(remember?'令牌已保存在此设备，刷新后自动使用。':'令牌仅本次使用，不保存在此设备。'):'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
+    const entered=$('token-input').value.trim(),saved=await readCredential(repo),nextToken=entered||(repo===state.repo?token:saved.token),remember=$('remember-token').checked;if(nextToken.length>4096)throw new Error('令牌格式不正确。');if(repo!==state.repo)token='';await write(s=>{if(s.repo!==repo){s.base=emptyData();s.lastSync=null;}s.repo=repo;});await saveCredential(repo,nextToken,remember);token=nextToken;rememberToken=remember;marketAuto?.update();dataAuto?.update();$('token-input').value='';$('token-input').placeholder=token?'已配置，留空继续使用':'输入你已创建的细粒度令牌';$('settings-message').textContent=token?(remember?'令牌已保存在此设备，刷新后自动使用。':'令牌仅本次使用，不保存在此设备。'):'仓库设置已保存，尚未输入令牌。';toast('设置已保存');
   });
-  $('forget-token').onclick=run(async()=>{if(syncing){toast('请等待同步结束。');return;}await saveCredential(state.repo,'',true);token='';rememberToken=true;marketAuto?.update();$('remember-token').checked=true;$('token-input').value='';$('token-input').placeholder='输入你已创建的细粒度令牌';$('settings-message').textContent='此设备保存的令牌已清除。';});
+  $('forget-token').onclick=run(async()=>{if(syncing){toast('请等待同步结束。');return;}await saveCredential(state.repo,'',true);token='';rememberToken=true;marketAuto?.update();dataAuto?.update();$('remember-token').checked=true;$('token-input').value='';$('token-input').placeholder='输入你已创建的细粒度令牌';$('settings-message').textContent='此设备保存的令牌已清除。';});
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
   workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,refreshMarket,canRefreshReading:()=>authenticated&&!!token&&navigator.onLine,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
-  document.addEventListener('visibilitychange',run(async()=>{marketAuto?.update();if(document.visibilityState==='visible'){await refreshLocalState();network();marketAuto?.update();}}));
-  addEventListener('pagehide',()=>marketAuto?.stop());addEventListener('pageshow',()=>marketAuto?.update());
+  document.addEventListener('visibilitychange',run(async()=>{marketAuto?.update();dataAuto?.update();if(document.visibilityState==='visible'){await refreshLocalState();network();marketAuto?.update();dataAuto?.update();checkAppUpdate();}}));
+  addEventListener('pagehide',()=>{marketAuto?.stop();dataAuto?.stop();});addEventListener('pageshow',()=>{marketAuto?.update();dataAuto?.update();checkAppUpdate();});
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});
   $('install-button').onclick=run(async()=>{await installPrompt?.prompt();installPrompt=null;$('install-button').hidden=true;});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
-  if('serviceWorker' in navigator){let refreshed=false;const updatePage=()=>{if(refreshed)return;if(syncing||document.querySelector('dialog[open]')){setTimeout(updatePage,1000);return;}refreshed=true;window.location.reload();};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(navigator.serviceWorker.controller)updatePage();});try{const registration=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});registration.update().catch(()=>{});await navigator.serviceWorker.ready;const worker=registration.active;if(worker){const channel=new MessageChannel();channel.port1.onmessage=e=>{$('offline-info').textContent=e.data?.ready?'离线页面已缓存。清除网站数据会删除本地任务，请定期导出备份。':'离线页面尚未缓存完成，请联网重新打开。';};worker.postMessage('CACHE_STATUS',[channel.port2]);}}catch{$('offline-info').textContent='当前浏览器未完成离线页面缓存。任务仍在本地保存，离线重新打开页面的能力尚不可用。';}}
+  if('serviceWorker' in navigator){let refreshed=false;const updatePage=()=>{if(refreshed)return;if(syncing||document.querySelector('dialog[open]')){setTimeout(updatePage,1000);return;}refreshed=true;window.location.reload();};navigator.serviceWorker.addEventListener('controllerchange',()=>{if(navigator.serviceWorker.controller)updatePage();});try{const registration=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});appRegistration=registration;lastAppCheck=Date.now();registration.update().catch(()=>{});await navigator.serviceWorker.ready;const worker=registration.active;if(worker){const channel=new MessageChannel();channel.port1.onmessage=e=>{$('offline-info').textContent=e.data?.ready?'离线页面已缓存。清除网站数据会删除本地任务，请定期导出备份。':'离线页面尚未缓存完成，请联网重新打开。';};worker.postMessage('CACHE_STATUS',[channel.port2]);}}catch{$('offline-info').textContent='当前浏览器未完成离线页面缓存。任务仍在本地保存，离线重新打开页面的能力尚不可用。';}}
 }
 function assetRead(id){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('asset:'+id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(new Error('读取附件失败。'));});}
 function saveAsset(asset){
@@ -274,7 +278,7 @@ function setSidebar(open){
   else{$('sidebar').removeAttribute('role');$('sidebar').removeAttribute('aria-modal');if(wasOpen)$('menu-button').focus();}
 }
 function setAuthenticated(value){
-  authenticated=value;marketAuto?.update();$('app-shell').hidden=!value;$('app-shell').inert=!value;$('login-panel').hidden=value;
+  authenticated=value;marketAuto?.update();dataAuto?.update();$('app-shell').hidden=!value;$('app-shell').inert=!value;$('login-panel').hidden=value;
   if(value){$('login-account').value='';$('login-error').textContent='';$('new-task').focus();}
   else{$('login-account').value='';$('login-account').focus();}
 }

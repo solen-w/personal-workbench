@@ -1,5 +1,5 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-investment-7';
-import {validateRecord} from './module-core.js?v=20261125-investment-7';
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-investment-8';
+import {validateRecord} from './module-core.js?v=20261125-investment-8';
 export const emptyData = () => ({schemaVersion:8,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;
@@ -36,6 +36,8 @@ function mergeHabit(B,L,R){
 function mergeInvestmentAccount(L,R){
  const fixed=r=>r?.kind==='records'&&r.value.variant==='account'&&r.value.fields.investmentKind;
  if(!fixed(L)&&!fixed(R))return null;
+ if(L?.value.version==='investment-account-default-v1'&&R?.value.version!=='investment-account-default-v1')return {record:R,conflict:false};
+ if(R?.value.version==='investment-account-default-v1'&&L?.value.version!=='investment-account-default-v1')return {record:L,conflict:false};
  if(!alive(L)||!alive(R))return {record:alive(L)?L:R,conflict:true};
  const winner=[L,R].sort((a,b)=>(a.value.updatedAt+'|'+a.value.version).localeCompare(b.value.updatedAt+'|'+b.value.version))[1],loser=winner===L?R:L,changed=['enabled','opening'].some(k=>L.value.fields[k]!==R.value.fields[k]);
  const read=r=>{try{const v=JSON.parse(r.value.fields.configConflicts||'[]');return Array.isArray(v)?v:[];}catch{return [];}};
