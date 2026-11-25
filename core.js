@@ -1,5 +1,5 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-investment-8';
-import {validateRecord} from './module-core.js?v=20261125-investment-8';
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261126-investment-sync-1';
+import {validateRecord} from './module-core.js?v=20261126-investment-sync-1';
 export const emptyData = () => ({schemaVersion:8,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;
