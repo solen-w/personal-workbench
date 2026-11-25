@@ -1,10 +1,10 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261122-remember-token-1';
-import {validateRecord} from './module-core.js?v=20261122-remember-token-1';
-export const emptyData = () => ({schemaVersion:5,tasks:[],tombstones:[],records:[],recordTombstones:[]});
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-accounts-1';
+import {validateRecord} from './module-core.js?v=20261125-accounts-1';
+export const emptyData = () => ({schemaVersion:6,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;
 export function validateData(data){
-  if(!data||![1,2,3,4,5].includes(data.schemaVersion)||!Array.isArray(data.tasks)||!Array.isArray(data.tombstones))throw new Error('数据格式不受支持。');
+  if(!data||![1,2,3,4,5,6].includes(data.schemaVersion)||!Array.isArray(data.tasks)||!Array.isArray(data.tombstones))throw new Error('数据格式不受支持。');
   if(data.schemaVersion>=2&&(!Array.isArray(data.records)||!Array.isArray(data.recordTombstones)))throw new Error('内容数据不完整。');
   if(data.tasks.length+data.tombstones.length+(data.records?.length||0)+(data.recordTombstones?.length||0)>20000)throw new Error('记录数量超过 20,000 条。');
   const ids=new Set();
@@ -17,7 +17,7 @@ export function validateData(data){
   const tombstones=data.tombstones.map(x=>tombstone(x,'task:'));
   const records=(data.records||[]).map(x=>{id(x,'record:');return validateRecord(x);});
   const recordTombstones=(data.recordTombstones||[]).map(x=>tombstone(x,'record:'));
-  return {schemaVersion:5,tasks,tombstones,records,recordTombstones};
+  return {schemaVersion:6,tasks,tombstones,records,recordTombstones};
 }
 export const stable=value=>value===undefined?'undefined':value===null||typeof value!=='object'?JSON.stringify(value):Array.isArray(value)?'['+value.map(stable).join(',')+']':'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+stable(value[key])).join(',')+'}';
 const same=(a,b)=>(!a&&!b)||(!!a&&!!b&&a.kind===b.kind&&stable(a.value)===stable(b.value));

@@ -1,9 +1,9 @@
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261122-remember-token-1';
-import {validateReading} from './reading-core.js?v=20261122-remember-token-1';
-import {createModuleView} from './module-view.js?v=20261122-remember-token-1';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261122-remember-token-1';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261122-remember-token-1';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261122-remember-token-1';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-accounts-1';
+import {validateReading} from './reading-core.js?v=20261125-accounts-1';
+import {createModuleView} from './module-view.js?v=20261125-accounts-1';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-accounts-1';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-accounts-1';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-accounts-1';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;

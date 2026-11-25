@@ -12,7 +12,7 @@ test('拒绝非法日期、负时长，书架只保留显示所需字段',()=>{c
 test('书名按稳定书籍编号保存，刷新来源和备份迁移后仍保留，并可恢复原名',async()=>{
   const id=await readingTitleId('book:1');assert.equal(id,await readingTitleId('book:1'));assert.notEqual(id,await readingTitleId('album:1'));
   const rename=validateRecord({id,module:'图书管理',variant:'reading-title',title:'自定义名',fields:{bookId:'book:1',customTitle:'自定义名'},version:'1',updatedAt:'2026-11-22T10:00:00Z'});
-  const saved=validateData({...emptyData(),records:[rename]});assert.equal(saved.schemaVersion,5);const source={...sample().books[0],title:'来源更新后的原名'};
+  const saved=validateData({...emptyData(),records:[rename]});assert.equal(saved.schemaVersion,6);const source={...sample().books[0],title:'来源更新后的原名'};
   assert.equal(displayReadingBook(source,saved.records).title,'自定义名');assert.equal(source.title,'来源更新后的原名');
   const restored={...rename,version:'2',updatedAt:'2026-11-22T11:00:00Z',fields:{...rename.fields,customTitle:''}};
   assert.equal(displayReadingBook(source,[restored,rename]).title,'来源更新后的原名');

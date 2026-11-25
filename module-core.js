@@ -1,7 +1,7 @@
-import {validPartialDate} from './workspace-core.js?v=20261122-remember-token-1';
-import {MODULE_ALIASES} from './config.js?v=20261122-remember-token-1';
-import {FINANCE_FORMS,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261122-remember-token-1';
-export {amountCents,money,financeTotals} from './finance-core.js?v=20261122-remember-token-1';
+import {validPartialDate} from './workspace-core.js?v=20261125-accounts-1';
+import {MODULE_ALIASES} from './config.js?v=20261125-accounts-1';
+import {FINANCE_FORMS,normalizeAccountType,signedCents,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261125-accounts-1';
+export {amountCents,money,financeTotals} from './finance-core.js?v=20261125-accounts-1';
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 export const MODULES={
   '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','联系方式'),field('email','邮箱','email'),field('occupation','职业'),field('politics','政治面貌'),field('hometown','户籍地'),field('address','住址'),field('intro','个人简介','textarea')]},
@@ -32,13 +32,14 @@ export function validateAttachment(value){
   return {id:value.id,path:value.path,name:value.name,type:value.type,size:value.size};
 }
 export function validateRecord(value){
-  value=normalizeModule(value||{});if(value.module==='基础情况'&&value.variant==='base'&&value.fields?.location&&!value.fields.hometown)value={...value,fields:{...value.fields,hometown:value.fields.location}};const module=getDefinition(value.module,value.variant);
+  value=normalizeModule(value||{});if(value.module==='财务管理'&&value.variant==='account')value={...value,fields:{...value.fields,kind:normalizeAccountType(value.fields?.kind)}};if(value.module==='基础情况'&&value.variant==='base'&&value.fields?.location&&!value.fields.hometown)value={...value,fields:{...value.fields,hometown:value.fields.location}};const module=getDefinition(value.module,value.variant);
   if(!module||typeof value.title!=='string'||!value.title.trim()||value.title.length>200||typeof value.id!=='string'||!value.id||value.id.length>200||typeof value.version!=='string'||!value.version||value.version.length>200)throw new Error('内容记录格式不正确。');
   const fields={};for(const field of module.fields){const v=value.fields?.[field.key]??'';if(typeof v!=='string'||v.length>(field.max||10000))throw new Error(`${field.label}格式不正确。`);if(field.required&&!v.trim())throw new Error(`请填写${field.label}。`);
     if(v&&field.type==='select'&&!field.options.includes(v))throw new Error(`${field.label}选项不正确。`);
     if(v&&field.type==='date'&&(!/^\d{4}-\d{2}-\d{2}$/.test(v)||!Number.isFinite(Date.parse(v))||new Date(v).toISOString().slice(0,10)!==v))throw new Error(`${field.label}日期不正确。`);
     if(v&&field.type==='number'&&(!Number.isFinite(Number(v))||Number(v)<(field.min??0)||Number(v)>(field.max??1e12)||!Number.isInteger(Number(v))))throw new Error(`${field.label}需为有效整数。`);
     if(v&&field.type==='money')amountCents(v);
+    if(v&&field.type==='signedmoney')signedCents(v);
     if(v&&field.type==='decimal'&&(!new RegExp('^\\d{1,9}(?:\\.\\d{1,'+(field.precision||2)+'})?$').test(v)||!Number.isFinite(Number(v))||Number(v)<(field.min??0)||Number(v)>(field.max??1e9)))throw new Error(field.label+'数值不正确。');
     if(v&&field.type==='partialdate'&&!validPartialDate(v))throw new Error(field.label+'需为有效年月或日期。');
     if(v&&field.type==='month'&&!/^\d{4}-\d{2}$/.test(v))throw new Error(field.label+'月份不正确。');
@@ -47,6 +48,8 @@ export function validateRecord(value){
   }
   if(module.kind==='experience'&&fields.start&&fields.end&&(fields.end.length===7?fields.end+'-31':fields.end)<(fields.start.length===7?fields.start+'-01':fields.start))throw new Error('结束日期不能早于开始日期。');
   if(module.kind==='book'&&fields.total&&Number(fields.current||0)>Number(fields.total))throw new Error('已读页数不能超过总页数。');
+  if(value.module==='财务管理'&&value.variant==='account-entry'){if(fields.kind==='调整'&&(!fields.account||!fields.delta))throw new Error('余额调整记录不完整。');if(fields.kind==='转账'&&(!fields.from||!fields.to||fields.from===fields.to||!amountCents(fields.amount)))throw new Error('转账记录不完整。');}
+  if(value.module==='财务管理'&&value.variant==='annual-saving'){if(!amountCents(fields.target))throw new Error('目标金额需大于零。');if(fields.status==='已归档'&&(!fields.archivedAt||!Number.isFinite(Date.parse(fields.archivedAt))||amountCents(fields.archivedCurrent)<amountCents(fields.target)))throw new Error('归档目标数据不完整或尚未达成。');}
   if(value.module==='财务管理'&&['budget','recovery'].includes(value.variant)&&mondayOf(fields.weekStart)!==fields.weekStart)throw new Error('所属预算周请填写周一日期。');
   if(value.module==='财务管理'&&value.variant==='investment')investmentValue({fields});
   if(module.kind==='workspace-profile'&&fields.photo&&!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(fields.photo))throw new Error('头像格式不正确。');
