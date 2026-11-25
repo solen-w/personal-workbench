@@ -1,9 +1,11 @@
-import {createAccountView} from './account-view.js?v=20261125-reading-auto-1';
-import {createReadingView} from './reading-view.js?v=20261125-reading-auto-1';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-reading-auto-1';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-reading-auto-1';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-reading-auto-1';
-import {uid} from './core.js?v=20261125-reading-auto-1';
+import {createInvestmentView} from './investment-view.js?v=20261125-investment-1';
+import {investmentTotals,investmentEvents,investmentKind} from './investment-core.js?v=20261125-investment-1';
+import {createAccountView} from './account-view.js?v=20261125-investment-1';
+import {createReadingView} from './reading-view.js?v=20261125-investment-1';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261125-investment-1';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261125-investment-1';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261125-investment-1';
+import {uid} from './core.js?v=20261125-investment-1';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -25,6 +27,7 @@ export function createModuleView(api){
   const definition=()=>getDefinition(moduleName,activeVariant);
   const editorDefinition=()=>getDefinition(moduleName,formVariant);
   const accountView=createAccountView(api,{edit,showDetail});
+  const investmentView=createInvestmentView(api,{edit});
   const accountName=value=>{const record=allRecords().find(item=>item.module==='财务管理'&&financeVariant(item)==='account'&&item.id===value);return record?.title||(/^[0-9a-f-]{36}$/i.test(value||'')?'已删除账户':value);};
   function cleanup(){urls.forEach(URL.revokeObjectURL);urls=[];}
   async function putRecord(record,old=original){
@@ -47,13 +50,14 @@ export function createModuleView(api){
     for(const field of def.fields){if(field.internal)continue;const label=element('label','module-field',field.label);let input;
       if(field.type==='partialdate'){const control=partialDateControl(record?.fields[field.key]||'',field.key);input=control.input;label.append(control.controls);}
       else if(field.type==='textarea'){input=document.createElement('textarea');input.rows=field.key==='content'?9:4;}
-      else if(field.type==='account'){input=document.createElement('select');const empty=element('option','','不关联账户');empty.value='';input.append(empty);for(const account of allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account')){const option=element('option','',account.title+(account.fields.status==='已停用'?'（已停用）':''));option.value=account.id;input.append(option);}const old=record?.fields[field.key];if(old&&![...input.options].some(option=>option.value===old)){const option=element('option','',old);option.value=old;input.append(option);}}
+      else if(field.type==='account'){input=document.createElement('select');const empty=element('option','','不关联账户');empty.value='';input.append(empty);for(const account of allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account'&&(!field.accountType||item.fields.kind===field.accountType))){const option=element('option','',account.title+(account.fields.status==='已停用'?'（已停用）':''));option.value=account.id;input.append(option);}const old=record?.fields[field.key];if(old&&![...input.options].some(option=>option.value===old)){const option=element('option','',old);option.value=old;input.append(option);}}
       else if(field.type==='select'){input=document.createElement('select');for(const value of field.options){const option=element('option','',value);option.value=value;input.append(option);}}
       else{input=document.createElement('input');input.type=field.type==='money'?'text':field.type==='decimal'?'number':field.type;input.autocomplete='off';if(field.type==='money'){input.inputMode='decimal';input.placeholder='0.00';}if(field.type==='number'||field.type==='decimal'){input.step=field.type==='decimal'?'0.'+'0'.repeat((field.precision||2)-1)+'1':'1';input.min=field.min??0;if(field.max!==undefined)input.max=field.max;}}
       input.name=field.key;input.id='record-field-'+field.key;input.required=!!field.required;input.maxLength=field.max||10000;input.value=record?.fields[field.key]??(field.options?.[0]||(field.key==='year'?String(new Date().getFullYear()):field.key==='weekStart'?financeWeek:['date','started'].includes(field.key)?(moduleName==='财务管理'&&activeVariant==='ledger'&&(localDay()<financeWeek||localDay()>addDays(financeWeek,6))?financeWeek:localDay()):field.key==='target'?(def.kind==='habit'?'7':'100'):field.key==='current'?'0':''));
+      if(def.kind==='investment'&&record&&investmentEvents(record,allRecords()).length&&['kind','symbol','quantity','cost','account'].includes(field.key))input.disabled=true;
       label.append(input);fragment.append(label);
     }
-    $('module-fields').replaceChildren(fragment);$('attachment-editor').hidden=!def.attachment;$('record-file').accept=def.attachment==='image'?'image/png,image/jpeg,image/webp,image/gif':'';$('remove-record-file').hidden=!draftAttachment;showAttachment();$('module-dialog').showModal();$('module-record-title').focus();
+    $('module-fields').replaceChildren(fragment);if(def.kind==='investment'){const query=button('查询行情',safe(async()=>{query.disabled=true;try{const kind=$('record-field-kind').value,code=$('record-field-symbol').value.trim()||(kind==='贵金属'?'GOLD':'');const result=await api.refreshMarket([{kind,code}]);const quote=result.quotes.find(item=>item.kind===kind&&item.code===code);if(!quote)throw new Error('未获得对应品种行情，原内容已保留。');$('record-field-symbol').value=code;$('record-field-price').value=quote.price;$('record-field-date').value=quote.date;if(!$('module-record-title').value.trim())$('module-record-title').value=quote.name;}finally{query.disabled=false;}}));$('module-fields').append(query);const labels=()=>{const kind=$('record-field-kind').value,map=kind==='股票'?['股票名称','股票代码','单位成本','现价','初始份额']:kind==='基金'?['基金名称','基金代码','成本净值','最新净值','初始份额']:kind==='贵金属'?['贵金属名称','行情标识（积存金填 GOLD）','克重成本','克重现价','初始克重']:['投资名称','代码','单位成本','参考价格','初始数量'];$('module-record-title-label').textContent=map[0];for(const [index,key] of ['symbol','cost','price','quantity'].entries())$('record-field-'+key).parentElement.firstChild.textContent=map[index+1];};$('record-field-kind').onchange=labels;labels();}$('attachment-editor').hidden=!def.attachment;$('record-file').accept=def.attachment==='image'?'image/png,image/jpeg,image/webp,image/gif':'';$('remove-record-file').hidden=!draftAttachment;showAttachment();$('module-dialog').showModal();$('module-record-title').focus();
   }
   function showAttachment(){$('record-file-name').textContent=draftAttachment?`${draftAttachment.name} · ${bytes(draftAttachment.size)}`:'未选择文件';$('remove-record-file').hidden=!draftAttachment;}
   async function toggleDay(record,date){
@@ -63,11 +67,12 @@ export function createModuleView(api){
     const row=element('div','record-actions');
     if(detail)row.append(button('查看',()=>showDetail(record),'button text-button'));
     if(record.attachment)row.append(button(definition().kind==='image'?'查看图片':'下载文件',safe(()=>openAttachment(record)), 'button text-button'));
-    row.append(button('编辑',()=>edit(record),'button text-button'),button('删除',()=>{$('module-delete-dialog').showModal();$('module-delete-confirm').onclick=safe(async()=>{await api.write(state=>{if(!state.data.records.some(item=>item.id===record.id))return;if(record.module==='财务管理'&&financeVariant(record)==='account'&&state.data.records.some(item=>item.id!==record.id&&item.module==='财务管理'&&['account','from','to'].some(key=>[record.id,record.title].includes(item.fields[key]))))throw new Error('该账户仍有关联收支或回收记录，可先编辑为已停用。');state.data.records=state.data.records.filter(item=>item.id!==record.id);state.data.recordTombstones.push({id:record.id,version:uid(),updatedAt:new Date().toISOString()});});$('module-delete-dialog').close();});},'button text-button destructive'));
+    row.append(button('编辑',()=>edit(record),'button text-button'),button('删除',()=>{$('module-delete-dialog').showModal();$('module-delete-confirm').onclick=safe(async()=>{await api.write(state=>{if(!state.data.records.some(item=>item.id===record.id))return;if(record.module==='财务管理'&&financeVariant(record)==='investment'&&investmentEvents(record,state.data.records).length)throw new Error('已有交易或基金申请的持仓不能删除，请通过交易调整。');if(record.module==='财务管理'&&financeVariant(record)==='account'&&state.data.records.some(item=>item.id!==record.id&&item.module==='财务管理'&&['account','from','to'].some(key=>[record.id,record.title].includes(item.fields[key]))))throw new Error('该账户仍有关联收支或回收记录，可先编辑为已停用。');state.data.records=state.data.records.filter(item=>item.id!==record.id);state.data.recordTombstones.push({id:record.id,version:uid(),updatedAt:new Date().toISOString()});});$('module-delete-dialog').close();});},'button text-button destructive'));
     if(record.module==='财务管理'&&financeVariant(record)==='account')row.insertBefore(button('余额调整',()=>accountView.adjust(record),'button text-button'),row.lastChild);
     card.append(row);
   }
   function showDetail(record){
+    if(record.module==='财务管理'&&financeVariant(record)==='investment'){investmentView.detail(record);return;}
     $('detail-title').textContent=record.title;const content=$('detail-content');content.replaceChildren();
     for(const field of getDefinition(record.module,record.variant).fields){const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
       if(field.type==='url'){const link=element('a','record-link',value);link.href=value;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}else section.append(element('div','detail-text',field.type==='account'?accountName(value):field.type==='partialdate'?displayPartialDate(value):value));content.append(section);
@@ -94,7 +99,7 @@ export function createModuleView(api){
   function renderFinanceStats(container,records){
     const report=weekReport(records,financeWeek),cash=value=>'¥ '+money(value),items=variant=>records.filter(record=>financeVariant(record)===variant);
     if(activeVariant==='account'){const totals=assetTotals(records),debt=stat('负债',cash(totals.debt));debt.append(element('div','debt-ratio','负债率 '+(totals.ratio===null?'—':totals.ratio+'%')));container.append(stat('净资产',cash(totals.net)),stat('总资产',cash(totals.assets)),debt);}
-    else if(activeVariant==='investment'){const totals=items('investment').reduce((sum,record)=>{const value=investmentValue(record);sum.cost+=value.cost;sum.current+=value.current;return sum;},{cost:0,current:0});container.append(stat('参考成本',cash(totals.cost)),stat('观察估值',cash(totals.current)),stat('观察盈亏',cash(totals.current-totals.cost)));}
+    else if(activeVariant==='investment'){const totals=investmentTotals(records);container.append(stat('投资总市值','¥ '+money(totals.current)),stat('持仓收益额',totals.change===null?'—':'¥ '+money(totals.change)),stat('持仓收益率',totals.rate===null?'—':totals.rate.toFixed(2)+'%'));}
     else if(activeVariant==='saving'){const goals=items('saving'),target=goals.reduce((sum,record)=>sum+amountCents(record.fields.target),0),current=goals.reduce((sum,record)=>sum+amountCents(record.fields.current),0);container.append(stat('目标金额',cash(target)),stat('已存金额',cash(current)),stat('待存金额',cash(Math.max(0,target-current))));}
     else if(activeVariant==='recovery')container.append(stat('支出后结余',report.hasBudget?cash(report.surplus):'未设置预算'),stat('已回收',cash(report.recovered)),stat('可回收结余',report.hasBudget?cash(report.available):'—'));
     else if(activeVariant==='analysis')container.append(stat('实际支出占预算',report.ratio===null?'—':report.ratio+'%'),stat('已回收',cash(report.recovered)),stat('可用结余',report.hasBudget?cash(report.available):'—'));
@@ -127,7 +132,7 @@ export function createModuleView(api){
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'ledger':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
     const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&!['reading-title','workspace-profile'].includes(record.variant)),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
-    readingView.render(name==='图书管理');
+    readingView.render(name==='图书管理');investmentView.render(moduleRecords,name==='财务管理'&&activeVariant==='investment');document.querySelector('.module-panel').hidden=name==='财务管理'&&activeVariant==='investment';
     document.querySelector('.module-workspace').hidden=name==='图书管理';
     renderSubnav();$('finance-weekbar').hidden=name!=='财务管理'||!['ledger','budget','recovery','analysis'].includes(activeVariant);$('finance-week').value=financeWeek;$('finance-week-range').textContent=financeWeek+' 至 '+addDays(financeWeek,6);$('module-export').hidden=!['基础情况','学工经历'].includes(name);$('new-task').hidden=def.kind==='analysis';
     if(name==='图书管理')$('new-task').hidden=true;
@@ -142,6 +147,7 @@ export function createModuleView(api){
       if(name==='财务管理'&&activeVariant==='recovery')return record.fields.weekStart===financeWeek;
       return true;
     });
+    if(def.kind==='investment')visible=[];
     visible.sort(def.kind==='experience'?experienceOrder:(a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     $('module-count').textContent=visible.length+' 项';
     const stats=$('module-stats');stats.replaceChildren();stats.hidden=false;stats.classList.toggle('account-assets-stats',name==='财务管理'&&activeVariant==='account');

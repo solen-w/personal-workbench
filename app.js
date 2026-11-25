@@ -1,10 +1,12 @@
-import {requestReadingUpdate} from './reading-job.js?v=20261125-reading-auto-1';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-reading-auto-1';
-import {validateReading} from './reading-core.js?v=20261125-reading-auto-1';
-import {createModuleView} from './module-view.js?v=20261125-reading-auto-1';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-reading-auto-1';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-reading-auto-1';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-reading-auto-1';
+import {requestMarketUpdate} from './market-job.js?v=20261125-investment-1';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-1';
+import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-1';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-1';
+import {validateReading} from './reading-core.js?v=20261125-investment-1';
+import {createModuleView} from './module-view.js?v=20261125-investment-1';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-1';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-1';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-1';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -154,6 +156,14 @@ async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).ge
   check();onProgress('正在载入新数据…');const report=await readSnapshot();if(!report||!Number.isFinite(Date.parse(outcome.dataUpdatedAt))||Date.parse(report.updatedAt)<Date.parse(outcome.dataUpdatedAt))throw new Error('后台已完成，数据暂未读到，请稍后再次更新；原有数据已保留。');
   check();await write(next=>{if(next.repo!==repo)throw new Error('数据仓库已变化，请重新更新。');next.readingReport={repo,data:report};delete next.readingJob;});return {updated:true};
 }
+let marketUpdating=false;
+async function refreshMarket(symbols,onProgress=()=>{}){
+  if(marketUpdating)throw new Error('正在更新行情，请稍候。');if(!authenticated)throw new Error('请先登录。');if(!token)throw new Error('请先在同步与设置中配置 GitHub 令牌。');if(!navigator.onLine)throw new Error('当前离线，原报价和持仓已保留。');
+  marketUpdating=true;const repo=state.repo,accessToken=token,check=()=>{if(!authenticated||state.repo!==repo||token!==accessToken)throw new Error('登录状态或仓库已变化，请重新查询。');};
+  try{await ensurePrivateRepo(repo,accessToken);const result=await requestMarketUpdate({repo,symbols,pending:state.marketJob,request:(method,body,path,raw)=>request(repo,method,body,path,raw,accessToken),check,onProgress,onPending:job=>write(next=>{check();if(job)next.marketJob=job;else delete next.marketJob;})});check();let updated=0;
+    await write(next=>{check();const now=new Date().toISOString();for(const quote of result.quotes){quoteKey(quote.kind,quote.code);const id='investment-quote:'+({'股票':'stock','基金':'fund','贵金属':'metal'}[quote.kind])+':'+quote.code,old=next.data.records.find(r=>r.id===id);if(old&&old.fields.asOf>quote.asOf)continue;const record=validateRecord({id,module:'财务管理',variant:'investment-quote',title:String(quote.name||quote.code).slice(0,200),fields:quote,version:uid(),updatedAt:now,createdAt:old?.createdAt||now});if(!old)next.data.records.push(record);else if(old.fields.price!==record.fields.price||old.fields.asOf!==record.fields.asOf)next.data.records[next.data.records.findIndex(r=>r.id===id)]=record;updated++;}next.marketLastRefresh=Date.now();delete next.marketJob;});return {quotes:result.quotes,updated,failed:result.errors?.length||0};
+  }finally{marketUpdating=false;}
+}
 async function initialize(){
   buildNavigation();
   db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();render();network();
@@ -181,7 +191,7 @@ async function initialize(){
   $('export-button').onclick=run(exportBackup);
   $('import-button').onclick=()=>$('import-file').click();
   $('import-file').onchange=run(importBackup);
-  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,canRefreshReading:()=>authenticated&&!!token&&navigator.onLine,syncStatus:()=>$('sync-status').textContent});render();
+  workspaceModules=createModuleView({state:()=>state,write,toast,getAsset,saveAsset,refreshReading,refreshMarket,canRefreshReading:()=>authenticated&&!!token&&navigator.onLine,syncStatus:()=>$('sync-status').textContent});render();
   addEventListener('online',network);addEventListener('offline',network);
   document.addEventListener('visibilitychange',run(async()=>{if(document.visibilityState==='visible'){await refreshLocalState();network();}}));
   addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('install-button').hidden=false;});

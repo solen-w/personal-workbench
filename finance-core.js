@@ -1,3 +1,4 @@
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition} from './investment-core.js?v=20261125-investment-1';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
@@ -9,7 +10,9 @@ export const FINANCE_FORMS={
   'annual-saving':{kind:'annual-saving',label:'年度存款目标',action:'新增年度目标',titleLabel:'目标名称',fields:[f('year','年度','number',{required:true,min:2000,max:2100}),f('target','目标金额','money',{required:true}),f('note','备注','textarea'),f('status','目标状态','select',{options:['进行中','已归档'],internal:true}),f('archivedCurrent','归档时存款','money',{internal:true}),f('archivedAt','归档时间','text',{internal:true})]},
   budget:{kind:'budget',label:'固定预算',action:'设置周预算',titleLabel:'预算名称',fields:[f('amount','每周固定金额','money',{required:true}),f('weekStart','生效周的周一','date',{required:true}),f('note','备注','textarea')]},
   recovery:{kind:'recovery',label:'结余回收',action:'记录回收',titleLabel:'回收事项',fields:[f('weekStart','所属周的周一','date',{required:true}),f('amount','手动回收金额','money',{required:true}),f('date','回收日期','date',{required:true}),f('from','转出账户（可选）','account'),f('to','转入账户（可选）','account'),f('note','备注','textarea')]},
-  investment:{kind:'investment',label:'投资观察',action:'新增观察',titleLabel:'投资名称',fields:[f('symbol','代码'),f('kind','资产类型','select',{options:['基金','股票','债券','其他']}),f('cost','参考成本价','decimal',{precision:4,required:true}),f('price','观察价格','decimal',{precision:4,required:true}),f('quantity','观察数量','decimal',{precision:4,required:true}),f('date','价格记录日期','date',{required:true}),f('note','观察笔记','textarea')]},
+  investment:{kind:'investment',label:'投资持仓',action:'新增持仓',titleLabel:'投资名称',fields:[f('kind','资产类型','select',{options:['股票','基金','贵金属','其他']}),f('symbol','代码（积存金自动行情使用 GOLD）'),f('cost','单位均价成本','decimal',{precision:4,required:true}),f('price','参考现价 / 净值','decimal',{precision:4}),f('quantity','初始份额 / 克重','decimal',{precision:6,required:true}),f('date','报价日期','date'),f('account','投资类资金账户（初始股票/基金成本从中扣除）','account',{accountType:'投资'}),f('note','备注','textarea'),f('funded','初始化资金登记','select',{options:['是'],internal:true})]},
+  'investment-event':{kind:'investment-event',fields:[f('holdingId','持仓编号','text',{required:true}),f('action','交易操作','select',{options:['trade','apply','confirm','arrive','cancel','fail','resolve'],required:true}),f('orderId','基金申请编号'),f('sequence','顺序','number',{required:true,min:1}),f('data','交易内容','textarea',{required:true,max:10000})]},
+  'investment-quote':{kind:'investment-quote',fields:[f('kind','行情类别','select',{options:['股票','基金','贵金属'],required:true}),f('code','代码','text',{required:true}),f('price','报价','decimal',{precision:4,required:true}),f('date','报价日期','date',{required:true}),f('asOf','供应商报价时间','text',{required:true}),f('source','来源','select',{options:['tencent','eastmoney','jdjygold'],required:true})]},
   analysis:{kind:'analysis',label:'克制分析',action:'',titleLabel:'',fields:[]},
   saving:{kind:'saving',label:'事项储蓄目标',action:'新增事项储蓄目标',titleLabel:'目标名称',fields:[f('target','目标金额','money',{required:true}),f('current','已存金额','money',{required:true}),f('account','关联账户','account'),f('due','目标日期','date'),f('plan','存款计划','textarea')]}
 };
@@ -30,13 +33,14 @@ export function weekReport(records,start){
   const recovered=items.filter(record=>financeVariant(record)==='recovery'&&record.fields.weekStart===start).reduce((sum,record)=>sum+amountCents(record.fields.amount),0);
   return {start,end,budget,spent,recovered,surplus:budget-spent,available:budget-spent-recovered,ratio:budget>0?Math.round(spent/budget*1000)/10:null,hasBudget:!!budgetRecord,ledger};
 }
-export function accountBalance(account,records){const debt=normalizeAccountType(account.fields.kind)==='负债';let balance=amountCents(account.fields.opening)*(debt?-1:1);const matches=value=>value===account.id||value===account.title;
+export function accountCashBalance(account,records){const debt=normalizeAccountType(account.fields.kind)==='负债';let balance=amountCents(account.fields.opening)*(debt?-1:1);const matches=value=>value===account.id||value===account.title;
   for(const record of records){if(record.module!=='财务管理')continue;const variant=financeVariant(record);
     if(variant==='ledger'&&matches(record.fields.account)){const amount=amountCents(record.fields.amount);balance+=record.fields.kind==='收入'?amount:-amount;}
     if(variant==='recovery'&&record.fields.from&&record.fields.to){const amount=amountCents(record.fields.amount);if(matches(record.fields.from))balance-=amount;if(matches(record.fields.to))balance+=amount;}
     if(variant==='account-entry'){if(record.fields.kind==='调整'&&matches(record.fields.account))balance+=signedCents(record.fields.delta);if(record.fields.kind==='转账'){const amount=amountCents(record.fields.amount)*(record.fields.direction==='负债转移'?-1:1);if(matches(record.fields.from))balance-=amount;if(matches(record.fields.to))balance+=amount;}}
-  }return balance*(debt?-1:1);
+  }return balance*(debt?-1:1)+(debt?0:investmentAccountState(account.id,records).cashChange);
 }
+export function accountBalance(account,records){const cash=accountCashBalance(account,records),investment=investmentAccountState(account.id,records);return cash+investment.market+investment.pending+investment.receivable;}
 export function assetTotals(records){let assets=0,debt=0,savings=0;for(const account of records.filter(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.fields.include!=='不计入总览')){const kind=normalizeAccountType(account.fields.kind),balance=accountBalance(account,records),position=balance*(kind==='负债'?-1:1);if(position>=0)assets+=position;else debt-=position;if(kind==='储蓄')savings+=balance;}return {assets,debt,net:assets-debt,ratio:assets>0?Math.round(debt/assets*1000)/10:null,savings};}
 export function annualSavingProgress(goal,records){const current=goal.fields.status==='已归档'?amountCents(goal.fields.archivedCurrent):Math.max(0,assetTotals(records).savings),target=amountCents(goal.fields.target);return {current,target,percent:target?Math.max(0,Math.min(100,Math.round(current/target*1000)/10)):0,achieved:target>0&&current>=target};}
 export function accountOperation(records,accountId,mode,value,toId='',date,note=''){
@@ -45,13 +49,13 @@ export function accountOperation(records,accountId,mode,value,toId='',date,note=
   if(mode==='transfer'){
     const to=records.find(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.id===toId);if(!to||to.id===account.id)throw new Error('请选择不同的转入账户。');
     const targetDebt=normalizeAccountType(to.fields.kind)==='负债';if(debt&&!targetDebt)throw new Error('负债只能转移至另一负债账户；还款请从资产账户转入。');
-    if(!amount||amount>Math.max(0,current))throw new Error('转移金额需大于零，且不能超过当前余额。');
+    if(!amount||amount>Math.max(0,accountCashBalance(account,records)))throw new Error('转移金额需大于零，且不能超过当前余额。');
     if(!debt&&targetDebt&&amount>Math.max(0,accountBalance(to,records)))throw new Error('还款金额不能超过该账户尚欠金额。');
     return {kind:'转账',from:account.id,to:to.id,amount:decimalMoney(amount),direction:debt?'负债转移':'正常',date,note};
   }
   const next=mode==='set'?amount:mode==='add'?current+amount:mode==='subtract'?current-amount:NaN;
   if(!Number.isFinite(next)||next<0)throw new Error('调整后的金额不能小于零。');if(next>99999999999)throw new Error('调整后的金额过大。');
-  const delta=(next-current)*(debt?-1:1);if(!delta)throw new Error('余额没有变化。');return {kind:'调整',account:account.id,delta:decimalMoney(delta),method:{set:'直接调整',add:'增加金额',subtract:'减少金额'}[mode],date,note};
+  const delta=(next-current)*(debt?-1:1);if(!debt&&accountCashBalance(account,records)+delta<0)throw new Error('不能减少或转出仍占用于持仓或基金在途中的资金。');if(!delta)throw new Error('余额没有变化。');return {kind:'调整',account:account.id,delta:decimalMoney(delta),method:{set:'直接调整',add:'增加金额',subtract:'减少金额'}[mode],date,note};
 }
 function scaled(value){if(!/^\d{1,9}(?:\.\d{1,4})?$/.test(String(value)))throw new Error('价格和数量最多保留四位小数。');const [whole,decimal='']=String(value).split('.');return BigInt(whole)*10000n+BigInt(decimal.padEnd(4,'0'));}
 export function investmentValue(record){const quantity=scaled(record.fields.quantity),current=(scaled(record.fields.price)*quantity+500000n)/1000000n,cost=(scaled(record.fields.cost)*quantity+500000n)/1000000n;if(current>BigInt(Number.MAX_SAFE_INTEGER)||cost>BigInt(Number.MAX_SAFE_INTEGER))throw new Error('投资记录数值过大。');return {current:Number(current),cost:Number(cost),change:Number(current-cost)};}
@@ -71,5 +75,12 @@ export function validateFinanceChange(record,records,editingId){
     if(record.fields.status!=='已归档'&&records.some(item=>item.id!==editingId&&item.module==='财务管理'&&financeVariant(item)==='annual-saving'&&item.fields.year===record.fields.year&&item.fields.status!=='已归档'))throw new Error('该年度已有进行中的存款目标，请编辑已有目标。');
     if(record.fields.status==='已归档'&&amountCents(record.fields.archivedCurrent)<amountCents(record.fields.target))throw new Error('达成目标后才可归档。');
   }
-  if(variant==='investment')investmentValue(record);
+  if(variant==='account'&&record.fields.kind!=='投资'&&records.some(item=>item.module==='财务管理'&&financeVariant(item)==='investment'&&item.fields.account===record.id))throw new Error('有关联持仓的投资账户不能改为其他类型。');
+  if(variant==='investment'){
+    const old=records.find(item=>item.id===editingId),events=old?investmentEvents(old,records):[];
+    if(events.length&&['kind','symbol','quantity','cost','account'].some(key=>record.fields[key]!==old.fields[key]))throw new Error('已有交易的持仓不能改写初始化数据，请使用交易登记。');
+    if(record.fields.account){const account=records.find(item=>item.id===record.fields.account&&item.module==='财务管理'&&financeVariant(item)==='account');if(!account||account.fields.kind!=='投资')throw new Error('请选择投资类资金账户。');record.fields.funded='是';const next=[...records.filter(item=>item.id!==editingId),record];if(accountCashBalance(account,next)<0)throw new Error('投资账户可用资金不足以登记初始持仓。');}
+    else record.fields.funded='';
+    if(!old||['kind','symbol','account'].some(key=>record.fields[key]!==old.fields[key])){if(record.fields.symbol&&records.some(item=>item.id!==editingId&&item.module==='财务管理'&&financeVariant(item)==='investment'&&investmentKind(item.fields.kind)===investmentKind(record.fields.kind)&&item.fields.symbol===record.fields.symbol&&item.fields.account===record.fields.account))throw new Error('该账户已有此代码的持仓，请通过交易增减。');}
+  }
 }
