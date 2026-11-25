@@ -1,6 +1,10 @@
 // 从鸿蒙工程的十进制估值、移动平均成本及基金确认流程适配；不执行真实交易。
 export const INVESTMENT_TYPES=['股票','基金','贵金属','其他'];
 export const investmentKind=value=>value==='积存金'?'贵金属':value==='债券'?'其他':INVESTMENT_TYPES.includes(value)?value:'基金';
+export const INVESTMENT_ACCOUNT_KINDS=['股票','基金','贵金属'];
+export const investmentAccountId=kind=>'investment-account:'+({'股票':'stock','基金':'fund','贵金属':'metal'}[kind]||'other');
+export const managedInvestmentAccount=(kind,records)=>records.find(r=>r.module==='财务管理'&&r.variant==='account'&&r.id===investmentAccountId(kind)&&r.fields.investmentKind===kind);
+export const investmentCashEnabled=account=>!!account&&(!account.fields.investmentKind||account.fields.enabled==='是');
 export const investmentDay=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,10);
 export const investmentNow=()=>new Date(Date.now()+8*3600000).toISOString().slice(0,16);
 export function units(value,places=6){const text=String(value??'');if(!new RegExp('^\\d{1,9}(?:\\.\\d{1,'+places+'})?$').test(text))throw new Error('数值格式不正确，最多'+places+'位小数。');const [a,b='']=text.split('.');return BigInt(a)*10n**BigInt(places)+BigInt(b.padEnd(places,'0'));}
@@ -34,11 +38,11 @@ export function investmentPosition(holding,records){
   const quote=investmentQuote(holding,records),current=quote?positionValue(unitText(quantity),quote.price):null,change=current===null?null:current-cost,rate=change===null||cost===0?null:Math.round(change/cost*10000)/100,average=quantity?unitText((BigInt(cost)*100000000n+quantity/2n)/quantity,4):'0';
   return {holding,quantity:unitText(quantity),cost,cashChange,pending,receivable,locked:unitText(locked),available:unitText(quantity-locked),realized,current,change,rate,average,quote,orders:[...orders.values()],errors,conflicts:investmentConflicts(holding,records),lastTradeDay};
 }
-export function investmentAccountState(accountId,records){let cashChange=0,market=0,pending=0,receivable=0;for(const holding of records.filter(r=>r.module==='财务管理'&&r.variant==='investment'&&r.fields.account===accountId)){const state=investmentPosition(holding,records);if(holding.fields.funded==='是'&&investmentKind(holding.fields.kind)!=='贵金属')cashChange-=baseInvestmentCost(holding);cashChange+=state.cashChange;market+=state.current??(investmentKind(holding.fields.kind)==='贵金属'?0:state.cost);pending+=state.pending;receivable+=state.receivable;}return {cashChange,market,pending,receivable};}
+export function investmentAccountState(accountId,records){let cashChange=0,market=0,pending=0,receivable=0;for(const holding of records.filter(r=>r.module==='财务管理'&&r.variant==='investment'&&r.fields.account===accountId)){const state=investmentPosition(holding,records);if(holding.fields.funded==='是'&&(investmentKind(holding.fields.kind)!=='贵金属'||records.find(r=>r.id===accountId)?.fields.investmentKind))cashChange-=baseInvestmentCost(holding);cashChange+=state.cashChange;market+=state.current??(records.find(r=>r.id===accountId)?.fields.investmentKind||investmentKind(holding.fields.kind)==='贵金属'?0:state.cost);pending+=state.pending;receivable+=state.receivable;}return {cashChange,market,pending,receivable};}
 export function investmentTotals(records){const positions=records.filter(r=>r.module==='财务管理'&&r.variant==='investment').map(h=>investmentPosition(h,records));const missing=positions.some(p=>p.current===null&&units(p.quantity)>0n),current=positions.reduce((sum,p)=>sum+(p.current||0),0),cost=positions.reduce((sum,p)=>sum+p.cost,0),change=missing?null:current-cost;return {positions,current,cost,change,rate:change===null||!cost?null:Math.round(change/cost*10000)/100,missing};}
 export function buildInvestmentEvent(holding,records,action,input,commandId){
   const state=investmentPosition(holding,records),kind=investmentKind(holding.fields.kind),orderId=action==='apply'?commandId:input.orderId||'',data={...input};delete data.orderId;
-  if(!holding.fields.account)throw new Error('请先编辑持仓，关联一个投资类资金账户。');if((state.errors.length||state.conflicts.length)&&action!=='resolve')throw new Error('该持仓存在待核对的交易冲突，请先查看交易记录。');
+  if(!holding.fields.account&&investmentCashEnabled(managedInvestmentAccount(kind,records)))throw new Error('请先编辑持仓，关联已启用的分类资金账户。');if((state.errors.length||state.conflicts.length)&&action!=='resolve')throw new Error('该持仓存在待核对的交易冲突，请先查看交易记录。');
   if(action==='trade'){if(kind==='基金')throw new Error('场外基金请使用申请与确认流程。');if(!['buy','sell'].includes(data.side))throw new Error('交易方向不正确。');if(data.date>investmentDay()||data.date<state.lastTradeDay)throw new Error('成交日期不能晚于今天或早于已有交易。');if(!units(data.quantity,kind==='贵金属'?4:2))throw new Error('数量需大于零。');}
   if(action==='apply'){if(kind!=='基金')throw new Error('仅场外基金使用申购赎回申请。');if(data.appliedAt>investmentNow())throw new Error('申请时间不能晚于当前时间。');fundDates(data.appliedAt,data.lag);if(data.side==='sell')units(data.quantity,2);}
   if(action==='confirm'){units(data.quantity,2);if(data.date>investmentDay())throw new Error('实际确认日期不能晚于今天。');}

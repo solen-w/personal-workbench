@@ -1,10 +1,10 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-investment-3';
-import {validateRecord} from './module-core.js?v=20261125-investment-3';
-export const emptyData = () => ({schemaVersion:7,tasks:[],tombstones:[],records:[],recordTombstones:[]});
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261125-investment-4';
+import {validateRecord} from './module-core.js?v=20261125-investment-4';
+export const emptyData = () => ({schemaVersion:8,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;
 export function validateData(data){
-  if(!data||![1,2,3,4,5,6,7].includes(data.schemaVersion)||!Array.isArray(data.tasks)||!Array.isArray(data.tombstones))throw new Error('数据格式不受支持。');
+  if(!data||![1,2,3,4,5,6,7,8].includes(data.schemaVersion)||!Array.isArray(data.tasks)||!Array.isArray(data.tombstones))throw new Error('数据格式不受支持。');
   if(data.schemaVersion>=2&&(!Array.isArray(data.records)||!Array.isArray(data.recordTombstones)))throw new Error('内容数据不完整。');
   if(data.tasks.length+data.tombstones.length+(data.records?.length||0)+(data.recordTombstones?.length||0)>20000)throw new Error('记录数量超过 20,000 条。');
   const ids=new Set();
@@ -17,7 +17,7 @@ export function validateData(data){
   const tombstones=data.tombstones.map(x=>tombstone(x,'task:'));
   const records=(data.records||[]).map(x=>{id(x,'record:');return validateRecord(x);});
   const recordTombstones=(data.recordTombstones||[]).map(x=>tombstone(x,'record:'));
-  return {schemaVersion:7,tasks,tombstones,records,recordTombstones};
+  return {schemaVersion:8,tasks,tombstones,records,recordTombstones};
 }
 export const stable=value=>value===undefined?'undefined':value===null||typeof value!=='object'?JSON.stringify(value):Array.isArray(value)?'['+value.map(stable).join(',')+']':'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+stable(value[key])).join(',')+'}';
 const same=(a,b)=>(!a&&!b)||(!!a&&!!b&&a.kind===b.kind&&stable(a.value)===stable(b.value));
@@ -32,6 +32,16 @@ function mergeHabit(B,L,R){
   const hash=[...checkins.join(',')].reduce((value,char)=>Math.imul(value^char.charCodeAt(0),16777619)>>>0,2166136261);
   return {kind:'records',value:{...L.value,checkins,version:'days-'+hash.toString(16),updatedAt:[L.value.updatedAt,R.value.updatedAt].sort().at(-1)}};
 }
+// 固定投资账户只保留一个资产条目；不同的开关/初始金额留在原条目中待核对。
+function mergeInvestmentAccount(L,R){
+ const fixed=r=>r?.kind==='records'&&r.value.variant==='account'&&r.value.fields.investmentKind;
+ if(!fixed(L)&&!fixed(R))return null;
+ if(!alive(L)||!alive(R))return {record:alive(L)?L:R,conflict:true};
+ const winner=[L,R].sort((a,b)=>(a.value.updatedAt+'|'+a.value.version).localeCompare(b.value.updatedAt+'|'+b.value.version))[1],loser=winner===L?R:L,changed=['enabled','opening'].some(k=>L.value.fields[k]!==R.value.fields[k]);
+ const read=r=>{try{const v=JSON.parse(r.value.fields.configConflicts||'[]');return Array.isArray(v)?v:[];}catch{return [];}};
+ const history=[...read(L),...read(R),...(changed?[{version:loser.value.version,updatedAt:loser.value.updatedAt,enabled:loser.value.fields.enabled,opening:loser.value.fields.opening}]:[])],unique=[...new Map(history.map(h=>[stable(h),h])).entries()].sort(([a],[b])=>a.localeCompare(b)).map(([,h])=>h).slice(-10),fields={...winner.value.fields,configConflicts:unique.length?JSON.stringify(unique):''},text=stable(fields),hash=[...text].reduce((v,ch)=>Math.imul(v^ch.charCodeAt(0),16777619)>>>0,2166136261);
+ return {record:{kind:'records',value:{...winner.value,fields,version:'investment-account-merged-'+hash.toString(16)}},conflict:changed};
+}
 export function mergeData(base,local,remote,makeId=uid){
   const b=mapData(base),l=mapData(local),r=mapData(remote),result=emptyData();let conflicts=0;
   const add=record=>{if(record)result[record.kind].push(structuredClone(record.value));};
@@ -39,7 +49,7 @@ export function mergeData(base,local,remote,makeId=uid){
   for(const key of new Set([...b.keys(),...l.keys(),...r.keys()])){
     const B=b.get(key),L=l.get(key),R=r.get(key);
     if(same(L,R))add(L);else if(same(L,B))add(R);else if(same(R,B))add(L);
-    else {const habit=mergeHabit(B,L,R);if(habit){add(habit);continue;}conflicts++;
+    else {const account=mergeInvestmentAccount(L,R);if(account){add(account.record);if(account.conflict)conflicts++;continue;}const habit=mergeHabit(B,L,R);if(habit){add(habit);continue;}conflicts++;
       if(alive(L)&&alive(R)){add(R);copy(L);}else{const living=alive(L)?L:alive(R)?R:null,deleted=L&&!alive(L)?L:R&&!alive(R)?R:null;add(deleted);if(living)copy(living);}
     }
   }

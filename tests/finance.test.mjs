@@ -35,7 +35,7 @@ test('投资观察支持四位小数，乘积按分四舍五入并拒绝溢出',
 test('旧版文字和图片迁移为素材分类，保留附件和删除标记',()=>{
   const common={title:'旧内容',version:'v1',updatedAt:'',createdAt:''},attachment={id:'image',path:'data/assets/image',name:'photo.png',type:'image/png',size:4};
   const migrated=validateData({schemaVersion:2,tasks:[],tombstones:[],records:[{...common,id:'text',module:'文曲含章',fields:{content:'正文'}},{...common,id:'image',module:'万象包罗',fields:{tags:'照片'},attachment}],recordTombstones:[{id:'removed',version:'d',updatedAt:''}]});
-  assert.equal(migrated.schemaVersion,7);assert.deepEqual(migrated.records.map(item=>[item.module,item.variant]),[['素材收集','text'],['素材收集','image']]);assert.deepEqual(migrated.records[1].attachment,attachment);assert.equal(migrated.recordTombstones.length,1);
+  assert.equal(migrated.schemaVersion,8);assert.deepEqual(migrated.records.map(item=>[item.module,item.variant]),[['素材收集','text'],['素材收集','image']]);assert.deepEqual(migrated.records[1].attachment,attachment);assert.equal(migrated.recordTombstones.length,1);
 });
 test('新增运动、学习与身体记录支持数值校验',()=>{
   const base={id:'r',title:'记录',version:'v1'};

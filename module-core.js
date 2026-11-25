@@ -1,8 +1,8 @@
-import {investmentKind,validateInvestmentEvent,validateInvestmentQuote,positionValue} from './investment-core.js?v=20261125-investment-3';
-import {validPartialDate} from './workspace-core.js?v=20261125-investment-3';
-import {MODULE_ALIASES} from './config.js?v=20261125-investment-3';
-import {FINANCE_FORMS,normalizeAccountType,signedCents,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261125-investment-3';
-export {amountCents,money,financeTotals} from './finance-core.js?v=20261125-investment-3';
+import {investmentAccountId,investmentKind,validateInvestmentEvent,validateInvestmentQuote,positionValue} from './investment-core.js?v=20261125-investment-4';
+import {validPartialDate} from './workspace-core.js?v=20261125-investment-4';
+import {MODULE_ALIASES} from './config.js?v=20261125-investment-4';
+import {FINANCE_FORMS,normalizeAccountType,signedCents,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261125-investment-4';
+export {amountCents,money,financeTotals} from './finance-core.js?v=20261125-investment-4';
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 export const MODULES={
   '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','联系方式'),field('email','邮箱','email'),field('occupation','职业'),field('politics','政治面貌'),field('hometown','户籍地'),field('address','住址'),field('intro','个人简介','textarea')]},
@@ -52,6 +52,7 @@ export function validateRecord(value){
   if(value.module==='财务管理'&&value.variant==='account-entry'){if(fields.kind==='调整'&&(!fields.account||!fields.delta))throw new Error('余额调整记录不完整。');if(fields.kind==='转账'&&(!fields.from||!fields.to||fields.from===fields.to||!amountCents(fields.amount)))throw new Error('转账记录不完整。');}
   if(value.module==='财务管理'&&value.variant==='annual-saving'){if(!amountCents(fields.target))throw new Error('目标金额需大于零。');if(fields.status==='已归档'&&(!fields.archivedAt||!Number.isFinite(Date.parse(fields.archivedAt))||amountCents(fields.archivedCurrent)<amountCents(fields.target)))throw new Error('归档目标数据不完整或尚未达成。');}
   if(value.module==='财务管理'&&['budget','recovery'].includes(value.variant)&&mondayOf(fields.weekStart)!==fields.weekStart)throw new Error('所属预算周请填写周一日期。');
+  if(value.module==='财务管理'&&value.variant==='account'){if(fields.investmentKind){if(value.id!==investmentAccountId(fields.investmentKind)||fields.kind!=='投资'||!['是','否'].includes(fields.enabled)||fields.enabled==='是'&&!fields.opening||fields.enabled==='否'&&fields.opening)throw new Error('分类投资账户设置不正确。');}else if(!fields.opening)throw new Error('请填写期初金额。');}
   if(value.module==='财务管理'&&value.variant==='investment'){positionValue(fields.quantity,fields.cost);if(fields.price)positionValue(fields.quantity,fields.price);}
   if(value.module==='财务管理'&&value.variant==='investment-event')validateInvestmentEvent(fields);
   if(value.module==='财务管理'&&value.variant==='investment-quote')validateInvestmentQuote(fields);

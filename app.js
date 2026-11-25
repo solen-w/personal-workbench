@@ -1,12 +1,13 @@
-import {requestMarketUpdate} from './market-job.js?v=20261125-investment-3';
-import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-3';
-import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-3';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-3';
-import {validateReading} from './reading-core.js?v=20261125-investment-3';
-import {createModuleView} from './module-view.js?v=20261125-investment-3';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-3';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-3';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-3';
+import {ensureInvestmentAccounts} from './finance-core.js?v=20261125-investment-4';
+import {requestMarketUpdate} from './market-job.js?v=20261125-investment-4';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261125-investment-4';
+import {requestReadingUpdate} from './reading-job.js?v=20261125-investment-4';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261125-investment-4';
+import {validateReading} from './reading-core.js?v=20261125-investment-4';
+import {createModuleView} from './module-view.js?v=20261125-investment-4';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261125-investment-4';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261125-investment-4';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261125-investment-4';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -24,7 +25,7 @@ async function restoreCredential(){const saved=await readCredential(state.repo);
 async function refreshLocalState(){const next=await read(),changed=next.repo!==state.repo;state=next;if(changed){token='';await restoreCredential();}render();}
 function read(){return new Promise((resolve,reject)=>{const req=db.transaction('documents').objectStore('documents').get('state');req.onsuccess=()=>resolve(normalizeState(req.result||fresh()));req.onerror=()=>reject(new Error('读取本地数据失败。'));});}
 // 在同一事务内读取和修改，避免多个标签页用旧数据互相覆盖。
-function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
+function write(change){return new Promise((resolve,reject)=>{const tx=db.transaction('documents','readwrite'), store=tx.objectStore('documents');let next,failure;const req=store.get('state');req.onsuccess=()=>{try{next=normalizeState(req.result||fresh());change(next);next.data.records=ensureInvestmentAccounts(next.data.records).map(validateRecord);next.revision++;store.put(next,'state');}catch(error){failure=error;tx.abort();}};tx.oncomplete=()=>{state=next;render();channel?.postMessage('updated');resolve(next);};tx.onerror=tx.onabort=()=>reject(failure||new Error('保存失败，可能是设备存储空间不足。请先导出备份。'));});}
 function normalizeState(saved){
   saved.data=validateData(saved.data);saved.base=validateData(saved.base);
   if(saved.profile&&!workspaceRecord(saved.data)){
@@ -166,7 +167,7 @@ async function refreshMarket(symbols,onProgress=()=>{}){
 }
 async function initialize(){
   buildNavigation();
-  db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();render();network();
+  db=await openDB();state=await read();state.data=validateData(state.data);state.base=validateData(state.base);await restoreCredential();await write(()=>{});render();network();
   bindAccountAndProfile();
   channel && (channel.onmessage=run(refreshLocalState));
   document.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{view=el.dataset.view;render();});
