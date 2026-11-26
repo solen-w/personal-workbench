@@ -1,12 +1,13 @@
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-4';
-import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-4';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-4';
-import {createAccountView} from './account-view.js?v=20261126-account-cards-4';
-import {createReadingView} from './reading-view.js?v=20261126-account-cards-4';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-4';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-4';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-4';
-import {uid} from './core.js?v=20261126-account-cards-4';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-account-cards-5';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-5';
+import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-5';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-5';
+import {createAccountView} from './account-view.js?v=20261126-account-cards-5';
+import {createReadingView} from './reading-view.js?v=20261126-account-cards-5';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-5';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-5';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-5';
+import {uid} from './core.js?v=20261126-account-cards-5';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -72,6 +73,7 @@ export function createModuleView(api){
     row.append(button('编辑',()=>edit(record),'button text-button'),button('删除',()=>{$('module-delete-dialog').showModal();$('module-delete-confirm').onclick=safe(async()=>{await api.write(state=>{if(!state.data.records.some(item=>item.id===record.id))return;if(record.module==='财务管理'&&financeVariant(record)==='investment'&&investmentEvents(record,state.data.records).length)throw new Error('已有交易或基金申请的持仓不能删除，请通过交易调整。');if(record.variant==='account'&&record.fields.investmentKind)throw new Error('固定投资条目不能删除，可在账户设置中关闭资金账户。');if(record.module==='财务管理'&&financeVariant(record)==='account'&&state.data.records.some(item=>item.id!==record.id&&item.module==='财务管理'&&['account','from','to'].some(key=>[record.id,record.title].includes(item.fields[key]))))throw new Error('该账户仍有关联收支或回收记录，可先编辑为已停用。');state.data.records=state.data.records.filter(item=>item.id!==record.id);state.data.recordTombstones.push({id:record.id,version:uid(),updatedAt:new Date().toISOString()});});$('module-delete-dialog').close();});},'button text-button destructive'));
     if(record.variant==='account'&&record.fields.investmentKind)row.lastChild.remove();
     if(record.module==='财务管理'&&financeVariant(record)==='account'&&investmentCashEnabled(record))row.insertBefore(button('余额调整',()=>accountView.adjust(record),'button text-button'),record.fields.investmentKind?null:row.lastChild);
+    if(record.module==='财务管理'&&financeVariant(record)==='account'){for(const action of [...row.children])if(['查看','编辑'].includes(action.textContent))action.remove();row.className='account-swipe-actions';attachAccountSwipe(card,row,()=>showDetail(record));return;}
     card.append(row);
   }
   function showDetail(record){
@@ -83,6 +85,7 @@ export function createModuleView(api){
     if(record.module==='财务管理'&&financeVariant(record)==='account'){content.prepend(element('p','account-detail-balance','当前金额 ¥ '+money(accountBalance(record,allRecords()))));const history=allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account-entry'&&['account','from','to'].some(key=>item.fields[key]===record.id)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));if(history.length){const section=element('section','detail-field');section.append(element('h3','','余额操作记录'));for(const item of history)meta(section,item.fields.date,item.fields.kind==='转账'?accountName(item.fields.from)+' → '+accountName(item.fields.to)+' · ¥ '+item.fields.amount:item.fields.method+' · '+item.fields.delta);content.append(section);}}
     if(record.attachment)content.append(button('下载文件',safe(()=>openAttachment(record))));
     if(getDefinition(record.module,record.variant).kind==='text')content.append(button('复制正文',safe(async()=>{await navigator.clipboard.writeText(record.fields.content);api.toast('已复制正文');})));
+    if(record.module==='财务管理'&&financeVariant(record)==='account')content.append(button('编辑',()=>{$('detail-dialog').close();edit(record);},'button primary account-detail-edit'));
     $('detail-dialog').showModal();
   }
   async function openAttachment(record){

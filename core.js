@@ -1,5 +1,5 @@
-import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261126-account-cards-4';
-import {validateRecord} from './module-core.js?v=20261126-account-cards-4';
+import {CATEGORY_NAMES, DEFAULT_CATEGORY, MODULE_ALIASES} from './config.js?v=20261126-account-cards-5';
+import {validateRecord} from './module-core.js?v=20261126-account-cards-5';
 export const emptyData = () => ({schemaVersion:8,tasks:[],tombstones:[],records:[],recordTombstones:[]});
 export const uid=()=>crypto.randomUUID();
 const str=(value,max)=>typeof value==='string'&&value.length<=max;
