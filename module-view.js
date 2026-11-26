@@ -1,12 +1,12 @@
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-3';
-import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-3';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-3';
-import {createAccountView} from './account-view.js?v=20261126-account-cards-3';
-import {createReadingView} from './reading-view.js?v=20261126-account-cards-3';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-3';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-3';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-3';
-import {uid} from './core.js?v=20261126-account-cards-3';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-4';
+import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-4';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-4';
+import {createAccountView} from './account-view.js?v=20261126-account-cards-4';
+import {createReadingView} from './reading-view.js?v=20261126-account-cards-4';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-4';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-4';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-4';
+import {uid} from './core.js?v=20261126-account-cards-4';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -143,6 +143,7 @@ export function createModuleView(api){
   }
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'account':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
+    if(activeVariant==='account'&&name==='财务管理'){query='';filter='';$('module-query').value='';}
     const currentEpoch=++epoch;cleanup();const def=definition(),moduleRecords=(data.records||[]).filter(record=>record.module===name&&!['reading-title','workspace-profile'].includes(record.variant)),records=moduleRecords.filter(record=>name==='财务管理'?financeVariant(record)===activeVariant:name==='素材收集'?(record.variant||'text')===activeVariant:true);
     readingView.render(name==='图书管理');investmentView.render(moduleRecords,name==='财务管理'&&activeVariant==='investment');document.querySelector('.module-panel').hidden=name==='财务管理'&&['investment','budget'].includes(activeVariant);renderBudgetWorkspace(moduleRecords,name==='财务管理'&&activeVariant==='budget');
     document.querySelector('.module-workspace').hidden=name==='图书管理';
@@ -170,7 +171,7 @@ export function createModuleView(api){
     else if(def.kind==='book')stats.append(stat('想读',records.filter(record=>record.fields.status==='想读').length),stat('在读',records.filter(record=>record.fields.status==='在读').length),stat('已读',records.filter(record=>record.fields.status==='已读').length));
     else stats.hidden=true;
     document.querySelector('.module-panel-heading').hidden=def.kind==='profile';
-    $('module-searchbar').hidden=def.kind==='profile'||def.kind==='analysis';
+    document.querySelector('.module-panel').classList.toggle('account-left-panel',def.kind==='account');$('module-searchbar').hidden=['profile','analysis','account'].includes(def.kind);
     renderFinanceAnalysis(moduleRecords);accountView.renderGoals(moduleRecords,name==='财务管理'&&activeVariant==='account');
     const list=$('module-records');list.className='module-records kind-'+def.kind;const fragment=document.createDocumentFragment();
     const accountGroups=new Map();if(def.kind==='account')for(const kind of ACCOUNT_TYPES){const section=element('section','account-group');section.append(element('h3','account-group-title',kind));const rows=element('div','account-group-rows');section.append(rows);accountGroups.set(kind,{section,rows});}

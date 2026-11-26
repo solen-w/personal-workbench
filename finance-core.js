@@ -1,4 +1,4 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-account-cards-3';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-account-cards-4';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
@@ -42,7 +42,7 @@ export function accountCashBalance(account,records){if(!investmentCashEnabled(ac
 }
 export function accountBalance(account,records){const cash=accountCashBalance(account,records),investment=investmentAccountState(account.id,records);return cash+investment.market+(investmentCashEnabled(account)?investment.pending+investment.receivable:0);}
 export function assetTotals(records){let assets=0,debt=0,savings=0;for(const account of records.filter(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.fields.include!=='不计入总览')){const kind=normalizeAccountType(account.fields.kind),balance=accountBalance(account,records),position=balance*(kind==='负债'?-1:1);if(position>=0)assets+=position;else debt-=position;if(kind==='储蓄')savings+=balance;}return {assets,debt,net:assets-debt,ratio:assets>0?Math.round(debt/assets*1000)/10:null,savings};}
-export function annualSavingProgress(goal,records){const current=goal.fields.status==='已归档'?amountCents(goal.fields.archivedCurrent):assetTotals(records).net,target=amountCents(goal.fields.target);return {current,target,percent:target?Math.max(0,Math.min(100,Math.round(current/target*1000)/10)):0,achieved:target>0&&current>=target};}
+export function annualSavingProgress(goal,records){const current=goal.fields.status==='已归档'?amountCents(goal.fields.archivedCurrent):assetTotals(records).net,target=amountCents(goal.fields.target);return {current,target,percent:target?Math.max(0,Math.min(100,Math.round(current/target*10000)/100)):0,achieved:target>0&&current>=target};}
 export function accountOperation(records,accountId,mode,value,toId='',date,note=''){
   if([accountId,toId].filter(Boolean).some(id=>{const account=records.find(r=>r.id===id);return account&&!investmentCashEnabled(account);}))throw new Error('请先在投资账户设置中启用资金账户。');
   const account=records.find(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.id===accountId);if(!account)throw new Error('账户已变化，请重新打开。');
