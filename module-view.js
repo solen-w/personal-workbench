@@ -1,12 +1,12 @@
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-investment-sync-1';
-import {createInvestmentView} from './investment-view.js?v=20261126-investment-sync-1';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-investment-sync-1';
-import {createAccountView} from './account-view.js?v=20261126-investment-sync-1';
-import {createReadingView} from './reading-view.js?v=20261126-investment-sync-1';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-investment-sync-1';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-investment-sync-1';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-investment-sync-1';
-import {uid} from './core.js?v=20261126-investment-sync-1';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-1';
+import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-1';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-1';
+import {createAccountView} from './account-view.js?v=20261126-account-cards-1';
+import {createReadingView} from './reading-view.js?v=20261126-account-cards-1';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-1';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-1';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-1';
+import {uid} from './core.js?v=20261126-account-cards-1';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -163,7 +163,7 @@ export function createModuleView(api){
     visible.sort(def.kind==='experience'?experienceOrder:def.kind==='account'?(a,b)=>{if(a.fields.investmentKind&&b.fields.investmentKind)return INVESTMENT_ACCOUNT_KINDS.indexOf(a.fields.investmentKind)-INVESTMENT_ACCOUNT_KINDS.indexOf(b.fields.investmentKind);if(a.fields.kind==='投资'&&b.fields.kind==='投资'&&!!a.fields.investmentKind!==!!b.fields.investmentKind)return a.fields.investmentKind?-1:1;return b.updatedAt.localeCompare(a.updatedAt);}:(a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     $('module-count').textContent=visible.length+' 项';
     const stats=$('module-stats');stats.replaceChildren();stats.hidden=false;stats.classList.toggle('investment-assets-stats',name==='财务管理'&&activeVariant==='investment');stats.classList.toggle('account-assets-stats',name==='财务管理'&&activeVariant==='account');
-    if(name==='财务管理'){renderFinanceStats(stats,moduleRecords);}
+    if(name==='财务管理'){if(activeVariant==='account')stats.hidden=true;else renderFinanceStats(stats,moduleRecords);}
     else if(def.kind==='body'){const byDate=[...records].sort((a,b)=>(b.fields.date||'').localeCompare(a.fields.date||''));const weight=byDate.find(record=>record.fields.weight),sleep=byDate.find(record=>record.fields.sleep);stats.append(stat('最近体重',weight?weight.fields.weight+' kg':'—'),stat('最近睡眠',sleep?sleep.fields.sleep+' 小时':'—'),stat('跟踪记录',records.length));}
     else if(def.kind==='goal'||def.kind==='theory')stats.append(stat('全部目标',records.length),stat('进行中',records.filter(record=>record.fields.status==='进行中').length),stat('已完成',records.filter(record=>record.fields.status==='已完成').length));
     else if(def.kind==='habit'){const days=weekDays(),today=localDay();stats.append(stat('习惯',records.length),stat('今日已打卡',records.filter(record=>record.checkins.includes(today)).length),stat('本周打卡',records.reduce((count,record)=>count+record.checkins.filter(day=>days.includes(day)).length,0)));}

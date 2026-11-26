@@ -1,7 +1,7 @@
-import {createInvestmentAccountView} from './investment-account-view.js?v=20261126-investment-sync-1';
-import {investmentTotals,investmentPosition,investmentKind,investmentEvents,buildInvestmentEvent,fundDates,investmentDay,investmentNow,quoteKey,investmentCashEnabled,managedInvestmentAccount,investmentProfitClass,tradeAmount,centsText} from './investment-core.js?v=20261126-investment-sync-1';
-import {accountCashBalance,money} from './finance-core.js?v=20261126-investment-sync-1';
-import {validateRecord} from './module-core.js?v=20261126-investment-sync-1';
+import {createInvestmentAccountView} from './investment-account-view.js?v=20261126-account-cards-1';
+import {investmentTotals,investmentPosition,investmentKind,investmentEvents,buildInvestmentEvent,fundDates,investmentDay,investmentNow,quoteKey,investmentCashEnabled,managedInvestmentAccount,investmentProfitClass,tradeAmount,centsText} from './investment-core.js?v=20261126-account-cards-1';
+import {accountCashBalance,money} from './finance-core.js?v=20261126-account-cards-1';
+import {validateRecord} from './module-core.js?v=20261126-account-cards-1';
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 const btn=(text,action)=>{const n=el('button','button text-button',text);n.type='button';n.onclick=action;return n;};
 const cash=value=>value===null?'—':'¥ '+money(value);

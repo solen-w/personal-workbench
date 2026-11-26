@@ -1,4 +1,4 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-investment-sync-1';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-account-cards-1';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
@@ -42,7 +42,7 @@ export function accountCashBalance(account,records){if(!investmentCashEnabled(ac
 }
 export function accountBalance(account,records){const cash=accountCashBalance(account,records),investment=investmentAccountState(account.id,records);return cash+investment.market+(investmentCashEnabled(account)?investment.pending+investment.receivable:0);}
 export function assetTotals(records){let assets=0,debt=0,savings=0;for(const account of records.filter(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.fields.include!=='不计入总览')){const kind=normalizeAccountType(account.fields.kind),balance=accountBalance(account,records),position=balance*(kind==='负债'?-1:1);if(position>=0)assets+=position;else debt-=position;if(kind==='储蓄')savings+=balance;}return {assets,debt,net:assets-debt,ratio:assets>0?Math.round(debt/assets*1000)/10:null,savings};}
-export function annualSavingProgress(goal,records){const current=goal.fields.status==='已归档'?amountCents(goal.fields.archivedCurrent):Math.max(0,assetTotals(records).savings),target=amountCents(goal.fields.target);return {current,target,percent:target?Math.max(0,Math.min(100,Math.round(current/target*1000)/10)):0,achieved:target>0&&current>=target};}
+export function annualSavingProgress(goal,records){const current=goal.fields.status==='已归档'?amountCents(goal.fields.archivedCurrent):assetTotals(records).net,target=amountCents(goal.fields.target);return {current,target,percent:target?Math.max(0,Math.min(100,Math.round(current/target*1000)/10)):0,achieved:target>0&&current>=target};}
 export function accountOperation(records,accountId,mode,value,toId='',date,note=''){
   if([accountId,toId].filter(Boolean).some(id=>{const account=records.find(r=>r.id===id);return account&&!investmentCashEnabled(account);}))throw new Error('请先在投资账户设置中启用资金账户。');
   const account=records.find(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&record.id===accountId);if(!account)throw new Error('账户已变化，请重新打开。');
@@ -107,3 +107,6 @@ export function ensureInvestmentAccounts(records){
   for(const id of sources){const account=next.find(r=>r.id===id&&r.variant==='account'),before=cashBefore.get(id);if(!account||before===null)continue;const delta=before-accountCashBalance(account,next);if(!delta)continue;next.push({id:'investment-account-migration:'+key+':'+hash(id),module:'财务管理',variant:'account-entry',title:'持仓分类迁移',fields:{kind:'调整',account:id,delta:decimalMoney(delta),method:'持仓分类迁移',date:day,note:'保留原账户可用余额'},version,createdAt:now,updatedAt:now});}
   return next;
 }
+
+export function accountDistribution(records){const kinds=['现金','储蓄','投资','其他'],values=kinds.map(kind=>({kind,amount:records.filter(r=>r.module==='财务管理'&&financeVariant(r)==='account'&&r.fields.include!=='不计入总览'&&normalizeAccountType(r.fields.kind)===kind).reduce((sum,r)=>sum+Math.max(0,accountBalance(r,records)),0)})),total=values.reduce((sum,r)=>sum+r.amount,0);return values.map(r=>({...r,percent:total?Math.round(r.amount/total*1000)/10:0}));}
+export function assetDebtDisplay(totals){const ratio=totals.assets>0?totals.debt/totals.assets:null,debtPercent=ratio===null?null:Math.round(ratio*1000)/10,netPercent=ratio===null?null:Math.round((1-ratio)*1000)/10;let label='无负债',level='none';if(totals.debt>totals.assets){label='资不抵债';level='critical';}else if(totals.debt>0){if(ratio>=0.5){label='负债偏高';level='high';}else if(ratio>=0.3){label='负债适中';level='medium';}else{label='负债较低';level='low';}}return {debtPercent,netPercent,netWidth:totals.assets>0?Math.max(0,Math.min(100,(1-ratio)*100)):0,debtWidth:totals.debt>0?totals.assets>0?Math.max(0,Math.min(100,ratio*100)):100:0,label,level};}
