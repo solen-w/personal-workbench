@@ -1,16 +1,17 @@
-import {investmentSyncData,sameInvestmentData,mergeInvestmentData,replaceInvestmentData} from './investment-sync.js?v=20261126-account-cards-6';
-import {createDataAutoSync} from './sync-auto.js?v=20261126-account-cards-6';
-import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261126-account-cards-6';
-import {ensureInvestmentAccounts} from './finance-core.js?v=20261126-account-cards-6';
-import {requestMarketUpdate} from './market-job.js?v=20261126-account-cards-6';
-import {investmentKind,quoteKey} from './investment-core.js?v=20261126-account-cards-6';
-import {requestReadingUpdate} from './reading-job.js?v=20261126-account-cards-6';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261126-account-cards-6';
-import {validateReading} from './reading-core.js?v=20261126-account-cards-6';
-import {createModuleView} from './module-view.js?v=20261126-account-cards-6';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-6';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261126-account-cards-6';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261126-account-cards-6';
+import {validateCalendar} from './calendar-core.js?v=20261126-calendar-1';
+import {investmentSyncData,sameInvestmentData,mergeInvestmentData,replaceInvestmentData} from './investment-sync.js?v=20261126-calendar-1';
+import {createDataAutoSync} from './sync-auto.js?v=20261126-calendar-1';
+import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261126-calendar-1';
+import {ensureInvestmentAccounts} from './finance-core.js?v=20261126-calendar-1';
+import {requestMarketUpdate} from './market-job.js?v=20261126-calendar-1';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261126-calendar-1';
+import {requestReadingUpdate} from './reading-job.js?v=20261126-calendar-1';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261126-calendar-1';
+import {validateReading} from './reading-core.js?v=20261126-calendar-1';
+import {createModuleView} from './module-view.js?v=20261126-calendar-1';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261126-calendar-1';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261126-calendar-1';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261126-calendar-1';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -121,6 +122,11 @@ async function checkConnection(){
   finally{button.disabled=false;}
 }
 function encode(data){const bytes=new TextEncoder().encode(JSON.stringify(data,null,2)+'\n');if(bytes.length>8*1024*1024)throw new Error('内容数据超过 8 MB，请先导出备份并减少长篇内容。');let s='';for(let i=0;i<bytes.length;i+=8192)s+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(s);}
+let calendarCheckedAt=0,calendarCheckedRepo='';
+async function refreshInvestmentCalendar(repo){
+  if(repo===calendarCheckedRepo&&Date.now()-calendarCheckedAt<60000)return;
+  try{const response=await request(repo,'GET',undefined,'data/investment-calendar.json',true);if(response.status===404){calendarCheckedRepo=repo;calendarCheckedAt=Date.now();return;}if(!response.ok)return;const text=await response.text();if(text.length>8*1024*1024)return;const data=validateCalendar(JSON.parse(text));if(state.repo!==repo)return;await write(s=>{if(s.repo===repo)s.investmentCalendar={repo,data};});calendarCheckedRepo=repo;calendarCheckedAt=Date.now();}catch{/* 日历读取失败时保留本机缓存，不影响原有数据同步。 */}
+}
 async function sync({silent=false,scope='all'}={}){
   if(!authenticated)throw new Error('请先登录。');
   if(syncing)return;if(!token){openSettings();$('settings-message').textContent='输入专用令牌后，再点击顶部“同步”。';$('token-input').focus();return;}
@@ -146,7 +152,7 @@ async function sync({silent=false,scope='all'}={}){
       if(s.repo!==repo)throw new Error('同步期间仓库设置发生变化，请重新同步。');
       const pending=scope==='investment'?mergeInvestmentData(snapshot.data,s.data,merged,{keep:s.data}):mergeData(snapshot.data,s.data,merged);s.data=pending.data;s.base=scope==='investment'?replaceInvestmentData(s.base,merged):merged;s.lastSync=new Date().toISOString();conflicts+=pending.conflicts;
     });
-    autoSyncError='';if(!silent)toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
+    await refreshInvestmentCalendar(repo);autoSyncError='';if(!silent)toast(conflicts?`同步完成，已保留 ${conflicts} 处冲突副本，请检查任务列表。`:sameData(state.data,state.base)?'同步完成':'同步完成；同步期间的新修改将在下次同步时上传。');
   }finally{syncing=false;render();}
 }
 async function refreshReading({force=true,year=new Date(Date.now()+8*3600000).getUTCFullYear(),onProgress=()=>{}}={}){

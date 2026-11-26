@@ -1,13 +1,14 @@
-import {attachAccountSwipe} from './account-swipe.js?v=20261126-account-cards-6';
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-account-cards-6';
-import {createInvestmentView} from './investment-view.js?v=20261126-account-cards-6';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-account-cards-6';
-import {createAccountView} from './account-view.js?v=20261126-account-cards-6';
-import {createReadingView} from './reading-view.js?v=20261126-account-cards-6';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-account-cards-6';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-account-cards-6';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-6';
-import {uid} from './core.js?v=20261126-account-cards-6';
+import {createCalendarView} from './calendar-view.js?v=20261126-calendar-1';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-1';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-1';
+import {createInvestmentView} from './investment-view.js?v=20261126-calendar-1';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-1';
+import {createAccountView} from './account-view.js?v=20261126-calendar-1';
+import {createReadingView} from './reading-view.js?v=20261126-calendar-1';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-1';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-1';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-1';
+import {uid} from './core.js?v=20261126-calendar-1';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -28,7 +29,7 @@ export function createModuleView(api){
   let formVariant='base';
   const definition=()=>getDefinition(moduleName,activeVariant);
   const editorDefinition=()=>getDefinition(moduleName,formVariant);
-  const accountView=createAccountView(api,{edit,showDetail});
+  const accountView=createAccountView(api,{edit,showDetail});const calendarView=createCalendarView(api);
   const investmentView=createInvestmentView(api,{edit});
   const accountName=value=>{const record=allRecords().find(item=>item.module==='财务管理'&&financeVariant(item)==='account'&&item.id===value);return record?.title||(/^[0-9a-f-]{36}$/i.test(value||'')?'已删除账户':value);};
   function cleanup(){urls.forEach(URL.revokeObjectURL);urls=[];}
@@ -175,7 +176,7 @@ export function createModuleView(api){
     else stats.hidden=true;
     document.querySelector('.module-panel-heading').hidden=def.kind==='profile';
     document.querySelector('.module-panel').classList.toggle('account-left-panel',def.kind==='account');$('module-searchbar').hidden=['profile','analysis','account'].includes(def.kind);
-    renderFinanceAnalysis(moduleRecords);accountView.renderGoals(moduleRecords,name==='财务管理'&&activeVariant==='account');
+    renderFinanceAnalysis(moduleRecords);accountView.renderGoals(moduleRecords,name==='财务管理'&&activeVariant==='account');calendarView.render(name==='财务管理'&&activeVariant==='account');
     const list=$('module-records');list.className='module-records kind-'+def.kind;const fragment=document.createDocumentFragment();
     const accountGroups=new Map();if(def.kind==='account')for(const kind of ACCOUNT_TYPES){const section=element('section','account-group');section.append(element('h3','account-group-title',kind));const rows=element('div','account-group-rows');section.append(rows);accountGroups.set(kind,{section,rows});}
     for(const record of visible){
