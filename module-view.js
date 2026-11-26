@@ -1,14 +1,14 @@
-import {createCalendarView} from './calendar-view.js?v=20261126-calendar-4';
-import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-4';
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-4';
-import {createInvestmentView} from './investment-view.js?v=20261126-calendar-4';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-4';
-import {createAccountView} from './account-view.js?v=20261126-calendar-4';
-import {createReadingView} from './reading-view.js?v=20261126-calendar-4';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-4';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-4';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-4';
-import {uid} from './core.js?v=20261126-calendar-4';
+import {createCalendarView} from './calendar-view.js?v=20261126-calendar-8';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-8';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-8';
+import {createInvestmentView} from './investment-view.js?v=20261126-calendar-8';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-8';
+import {createAccountView} from './account-view.js?v=20261126-calendar-8';
+import {createReadingView} from './reading-view.js?v=20261126-calendar-8';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-8';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-8';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-8';
+import {uid} from './core.js?v=20261126-calendar-8';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -107,7 +107,6 @@ export function createModuleView(api){
     const report=weekReport(records,financeWeek),cash=value=>'¥ '+money(value),items=variant=>records.filter(record=>financeVariant(record)===variant);
     if(activeVariant==='account'){const totals=assetTotals(records),debt=stat('负债',cash(totals.debt));debt.append(element('div','debt-ratio','负债率 '+(totals.ratio===null?'—':totals.ratio+'%')));container.append(stat('净资产',cash(totals.net)),stat('总资产',cash(totals.assets)),debt);}
     else if(activeVariant==='investment'){const totals=investmentTotals(records),available=records.filter(record=>record.module==='财务管理'&&financeVariant(record)==='account'&&normalizeAccountType(record.fields.kind)==='投资').reduce((sum,account)=>sum+accountCashBalance(account,records),0);container.append(stat('投资总市值','¥ '+money(totals.current)),stat('可用余额',cash(available)),stat('持仓收益额',totals.change===null?'—':'¥ '+money(totals.change)),stat('持仓收益率',totals.rate===null?'—':totals.rate.toFixed(2)+'%'));for(const card of [...container.children].slice(-2))card.classList.add(investmentProfitClass(totals.change));}
-    else if(activeVariant==='saving'){const goals=items('saving'),target=goals.reduce((sum,record)=>sum+amountCents(record.fields.target),0),current=goals.reduce((sum,record)=>sum+amountCents(record.fields.current),0);container.append(stat('目标金额',cash(target)),stat('已存金额',cash(current)),stat('待存金额',cash(Math.max(0,target-current))));}
     else if(activeVariant==='recovery')container.append(stat('支出后结余',report.hasBudget?cash(report.surplus):'未设置预算'),stat('已回收',cash(report.recovered)),stat('可回收结余',report.hasBudget?cash(report.available):'—'));
     else if(activeVariant==='analysis')container.append(stat('实际支出占预算',report.ratio===null?'—':report.ratio+'%'),stat('已回收',cash(report.recovered)),stat('可用结余',report.hasBudget?cash(report.available):'—'));
     else container.append(stat('本周固定预算',report.hasBudget?cash(report.budget):'未设置'),stat('本周实际支出',cash(report.spent)),stat('回收后可用结余',report.hasBudget?cash(report.available):'—'));
@@ -145,6 +144,12 @@ export function createModuleView(api){
     const def=definition(),escape=value=>{let text=String(value??'');if(/^[=+@\-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
     const rows=[[def.titleLabel,...def.fields.map(field=>field.label)],...selected().map(record=>[record.title,...def.fields.map(field=>record.fields[field.key])])];const blob=new Blob(['\ufeff'+rows.map(row=>row.map(escape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);download(url,moduleName+'-'+localDay()+'.csv');setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
+  function renderAccountSavings(records,show){
+    const root=$('account-savings');root.hidden=!show;root.replaceChildren();if(!show)return;
+    const goals=records.filter(record=>financeVariant(record)==='saving').sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),heading=element('div','saving-panel-heading');heading.append(element('h2','','事项储蓄'),element('span','saving-panel-count',goals.length+' 项'));if(goals.length)heading.append(button('新增',()=>edit(null,'saving'),'button text-button saving-add'));root.append(heading);
+    if(goals.length){const list=element('div','saving-panel-records');for(const record of goals){const card=element('article','record-card');card.append(element('h3','record-title',record.title));renderFinanceCard(card,record);actions(card,record,{detail:true});list.append(card);}root.append(list);}else{const empty=element('div','module-empty saving-empty'),icon=element('span','','▤');icon.setAttribute('aria-hidden','true');empty.append(icon,element('h3','','暂无事项储蓄'),button('新增事项储蓄',()=>edit(null,'saving'),'button subtle'));root.append(empty);}
+    const footer=element('footer','panel-footer');footer.append(element('span','',api.syncStatus()));root.append(footer);
+  }
   function render(name,data){
     if(name!==moduleName){moduleName=name;activeVariant=name==='财务管理'?'account':name==='素材收集'?'text':'base';query='';filter='';month='';$('module-query').value='';$('module-month').value='';}
     if(activeVariant==='account'&&name==='财务管理'){query='';filter='';$('module-query').value='';}
@@ -176,7 +181,7 @@ export function createModuleView(api){
     else stats.hidden=true;
     document.querySelector('.module-panel-heading').hidden=def.kind==='profile';
     document.querySelector('.module-panel').classList.toggle('account-left-panel',def.kind==='account');$('module-searchbar').hidden=['profile','analysis','account'].includes(def.kind);
-    renderFinanceAnalysis(moduleRecords);accountView.renderGoals(moduleRecords,name==='财务管理'&&activeVariant==='account');calendarView.render(name==='财务管理'&&activeVariant==='account');
+    renderFinanceAnalysis(moduleRecords);accountView.renderGoals(moduleRecords,name==='财务管理'&&activeVariant==='account');calendarView.render(name==='财务管理'&&activeVariant==='account');renderAccountSavings(moduleRecords,name==='财务管理'&&activeVariant==='account');
     const list=$('module-records');list.className='module-records kind-'+def.kind;const fragment=document.createDocumentFragment();
     const accountGroups=new Map();if(def.kind==='account'){
       const key='workbench-account-groups-v1:'+api.state().repo;let folded={};try{folded=JSON.parse(document.defaultView.localStorage.getItem(key)||'{}')||{};}catch{}

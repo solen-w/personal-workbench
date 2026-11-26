@@ -1,8 +1,8 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-calendar-4';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-calendar-8';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
-export const FINANCE_TABS=[{id:'account',label:'账户管理'},{id:'investment',label:'投资观察'},{id:'budget',label:'预算实用'},{id:'ledger',label:'总览统计'},{id:'saving',label:'事项储蓄'}];
+export const FINANCE_TABS=[{id:'account',label:'账户管理'},{id:'investment',label:'投资观察'},{id:'budget',label:'预算实用'},{id:'ledger',label:'总览统计'}];
 export const FINANCE_FORMS={
   ledger:{kind:'finance',label:'收支明细',action:'记一笔',titleLabel:'收支事项',fields:[f('kind','收支类型','select',{options:['支出','收入']}),f('amount','金额','money',{required:true}),f('category','收支分类'),f('date','日期','date',{required:true}),f('account','账户','account'),f('note','备注','textarea')]},
   account:{kind:'account',label:'账户管理',action:'新增账户',titleLabel:'账户名称',fields:[f('kind','账户类型','select',{options:ACCOUNT_TYPES}),f('opening','期初金额','money'),f('include','总览统计','select',{options:['计入总览','不计入总览']}),f('status','使用状态','select',{options:['使用中','已停用']}),f('note','备注','textarea'),f('investmentKind','投资分类','select',{options:INVESTMENT_ACCOUNT_KINDS,internal:true}),f('enabled','资金账户启用','select',{options:['是','否'],internal:true}),f('configConflicts','待核对的账户设置','textarea',{internal:true,max:10000})]},

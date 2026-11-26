@@ -1,4 +1,4 @@
-import {CALENDAR_FORMAT,beijingDay,calendarCells} from './calendar-core.js?v=20261126-calendar-4';
+import {CALENDAR_FORMAT,beijingDay,calendarCells} from './calendar-core.js?v=20261126-calendar-8';
 const el=(tag,cls,text)=>{const n=document.createElement(tag);n.className=cls;if(text!==undefined)n.textContent=text;return n;};
 const button=(text,fn,cls='')=>{const n=el('button',cls,text);n.type='button';n.onclick=fn;return n;};
 export function createCalendarView(api){
