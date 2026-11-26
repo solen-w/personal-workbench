@@ -1,4 +1,4 @@
-import {emptyData,mergeData,sameData} from './core.js?v=20261126-account-cards-2';
+import {emptyData,mergeData,sameData} from './core.js?v=20261126-account-cards-3';
 // 自动同步仅处理投资及其资金依赖；其他本地内容继续沿用原手动同步。
 function scopeInfo(...datasets){const ids=new Set(),accounts=new Set(),all=datasets.flatMap(d=>d?.records||[]);for(const r of all)if(r.module==='财务管理'&&r.variant==='account'&&(r.fields.kind==='投资'||r.fields.investmentKind)){accounts.add(r.id);if(!r.fields.investmentKind)accounts.add(r.title);}for(const r of all)if(r.module==='财务管理'&&(['investment','investment-event','investment-quote'].includes(r.variant)||(r.variant==='account'&&(r.fields.kind==='投资'||r.fields.investmentKind))||(['account-entry','ledger','recovery'].includes(r.variant)&&['account','from','to'].some(k=>accounts.has(r.fields[k])))))ids.add(r.id);return ids;}
 const project=(data,ids)=>({...emptyData(),records:(data.records||[]).filter(r=>ids.has(r.id)),recordTombstones:(data.recordTombstones||[]).filter(r=>ids.has(r.id))});

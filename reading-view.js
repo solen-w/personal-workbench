@@ -1,6 +1,6 @@
-import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId,readingCounts} from './reading-core.js?v=20261126-account-cards-2';
-import {validateRecord} from './module-core.js?v=20261126-account-cards-2';
-import {uid} from './core.js?v=20261126-account-cards-2';
+import {validateReading,duration,heatmapDays,chinaDay,displayReadingBook,readingTitleRecord,readingTitleId,readingCounts} from './reading-core.js?v=20261126-account-cards-3';
+import {validateRecord} from './module-core.js?v=20261126-account-cards-3';
+import {uid} from './core.js?v=20261126-account-cards-3';
 const node=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el;};
 const button=(text,action)=>{const el=node('button','button',text);el.type='button';el.onclick=action;return el;};
 const link=(text,url)=>{const el=node('a','button',text);el.href=url;el.target='_blank';el.rel='noopener noreferrer';return el;};
