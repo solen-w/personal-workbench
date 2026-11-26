@@ -1,14 +1,14 @@
-import {createCalendarView} from './calendar-view.js?v=20261126-calendar-3';
-import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-3';
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-3';
-import {createInvestmentView} from './investment-view.js?v=20261126-calendar-3';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-3';
-import {createAccountView} from './account-view.js?v=20261126-calendar-3';
-import {createReadingView} from './reading-view.js?v=20261126-calendar-3';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-3';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-3';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-3';
-import {uid} from './core.js?v=20261126-calendar-3';
+import {createCalendarView} from './calendar-view.js?v=20261126-calendar-4';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-4';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-4';
+import {createInvestmentView} from './investment-view.js?v=20261126-calendar-4';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-4';
+import {createAccountView} from './account-view.js?v=20261126-calendar-4';
+import {createReadingView} from './reading-view.js?v=20261126-calendar-4';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-4';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-4';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-4';
+import {uid} from './core.js?v=20261126-calendar-4';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -203,7 +203,7 @@ export function createModuleView(api){
       }else {if(def.kind==='policy'){card.append(element('span','record-tag',record.fields.status));meta(card,'文号',record.fields.number);meta(card,'发布机构',record.fields.issuer);meta(card,'施行日期',record.fields.effective);}else meta(card,'分类',record.fields.category);meta(card,'日期',record.fields.date);if(record.attachment)meta(card,'附件',record.attachment.name+' · '+bytes(record.attachment.size));actions(card,record,{detail:true});}
       if(def.kind==='account')accountGroups.get(normalizeAccountType(record.fields.kind)).rows.append(card);else fragment.append(card);
     }
-    if(def.kind==='account')for(const [kind,group] of accountGroups){const sum=records.filter(record=>normalizeAccountType(record.fields.kind)===kind).reduce((value,record)=>value+accountBalance(record,allRecords()),0);group.total.textContent='¥ '+money(sum);group.title.setAttribute('aria-label',kind+'，合计 ¥ '+money(sum));if(group.rows.children.length)fragment.append(group.section);}
+    if(def.kind==='account')for(const [kind,group] of accountGroups){const sum=records.filter(record=>normalizeAccountType(record.fields.kind)===kind).reduce((value,record)=>value+accountBalance(record,allRecords()),0);group.total.textContent='¥ '+money(sum);group.title.setAttribute('aria-label',kind+'，合计 ¥ '+money(sum));fragment.append(group.section);}
     list.replaceChildren(fragment);$('module-empty').hidden=visible.length>0||def.kind==='analysis';$('module-empty-title').textContent=query||filter||month?'没有匹配的内容':'暂无'+def.label;$('module-empty-add').hidden=!!(query||filter||month);$('module-empty-add').textContent=def.action;
     $('legacy-block').hidden=!(data.tasks||[]).some(task=>(task.category||'基础情况')===name);$('legacy-count').textContent=(data.tasks||[]).filter(task=>(task.category||'基础情况')===name).length+' 项';
     $('module-sync-status').textContent=api.syncStatus();
