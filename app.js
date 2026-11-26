@@ -1,16 +1,16 @@
-import {investmentSyncData,sameInvestmentData,mergeInvestmentData,replaceInvestmentData} from './investment-sync.js?v=20261126-account-cards-5';
-import {createDataAutoSync} from './sync-auto.js?v=20261126-account-cards-5';
-import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261126-account-cards-5';
-import {ensureInvestmentAccounts} from './finance-core.js?v=20261126-account-cards-5';
-import {requestMarketUpdate} from './market-job.js?v=20261126-account-cards-5';
-import {investmentKind,quoteKey} from './investment-core.js?v=20261126-account-cards-5';
-import {requestReadingUpdate} from './reading-job.js?v=20261126-account-cards-5';
-import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261126-account-cards-5';
-import {validateReading} from './reading-core.js?v=20261126-account-cards-5';
-import {createModuleView} from './module-view.js?v=20261126-account-cards-5';
-import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-5';
-import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261126-account-cards-5';
-import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261126-account-cards-5';
+import {investmentSyncData,sameInvestmentData,mergeInvestmentData,replaceInvestmentData} from './investment-sync.js?v=20261126-account-cards-6';
+import {createDataAutoSync} from './sync-auto.js?v=20261126-account-cards-6';
+import {createMarketAutoRefresh,autoStampKey} from './market-auto.js?v=20261126-account-cards-6';
+import {ensureInvestmentAccounts} from './finance-core.js?v=20261126-account-cards-6';
+import {requestMarketUpdate} from './market-job.js?v=20261126-account-cards-6';
+import {investmentKind,quoteKey} from './investment-core.js?v=20261126-account-cards-6';
+import {requestReadingUpdate} from './reading-job.js?v=20261126-account-cards-6';
+import {workspaceProfile,workspaceRecord} from './workspace-core.js?v=20261126-account-cards-6';
+import {validateReading} from './reading-core.js?v=20261126-account-cards-6';
+import {createModuleView} from './module-view.js?v=20261126-account-cards-6';
+import {validateRecord,validateAttachment,FILE_LIMIT} from './module-core.js?v=20261126-account-cards-6';
+import {emptyData, uid, validateData, mergeData, sameData, filterTasks} from './core.js?v=20261126-account-cards-6';
+import {NAV_GROUPS, CATEGORY_NAMES, DEFAULT_CATEGORY, isAuthorizedAccount} from './config.js?v=20261126-account-cards-6';
 const $=id=>document.getElementById(id);
 const names={all:'全部任务',today:'今日待办',upcoming:'即将到来',completed:'已完成'};
 let db, state, token='', view='all', priority='all', editing=null, deleting=null, syncing=false, installPrompt;
@@ -71,7 +71,7 @@ function render(){
   $('empty-add').hidden=!!filtered||view==='completed';$('empty-add').textContent='新建任务';
   $('save-status').textContent='已保存在本地';
   $('sync-status').textContent=syncing?'正在同步…':state.lastSync?`上次同步 ${new Date(state.lastSync).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}${sameData(state.data,state.base)?'':' · 有待同步修改'}`:sameData(state.data,state.base)?'尚未同步':'有待同步修改';
-  if(autoSyncError&&!syncing)$('sync-status').textContent+=' · 投资同步未完成';
+  if(autoSyncError&&!syncing)$('sync-status').textContent+=' · 投资与年度目标同步未完成';
   $('sync-button').disabled=syncing;
   workspaceModules?.render(activeCategory,state.data);
 }

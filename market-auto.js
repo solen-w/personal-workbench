@@ -1,4 +1,4 @@
-import {investmentKind,investmentPosition,quoteKey} from './investment-core.js?v=20261126-account-cards-5';
+import {investmentKind,investmentPosition,quoteKey} from './investment-core.js?v=20261126-account-cards-6';
 // 与鸿蒙 AutoQuoteRules 一致：北京时间、工作日交易窗口，不额外推定节假日。
 export const MARKET_CHECK_MS=60000;
 const day=now=>new Date(now+8*3600000).toISOString().slice(0,10);
