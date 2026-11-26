@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {ACCOUNT_ICONS} from '../account-icon-catalog.js';
+import {validateRecord} from '../module-core.js';
+import {configureInvestmentAccounts,ensureInvestmentAccounts} from '../finance-core.js';
+test('126个图标均有唯一稳定ID，PNG文件与内容摘要匹配',async()=>{assert.equal(ACCOUNT_ICONS.length,126);assert.equal(new Set(ACCOUNT_ICONS.map(i=>i.id)).size,126);assert.deepEqual([...new Set(ACCOUNT_ICONS.map(i=>i.group))],['银行','证券','生活','社交娱乐','网络服务']);for(const icon of ACCOUNT_ICONS){const bytes=await readFile(new URL('../'+icon.src,import.meta.url));assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.ok(icon.src.endsWith(createHash('sha256').update(bytes).digest('hex').slice(0,20)+'.png'));}});
+test('账户图标可校验并保存，拒绝任意外部地址',()=>{const row={id:'account',module:'财务管理',variant:'account',title:'账户',fields:{kind:'现金',opening:'1',icon:ACCOUNT_ICONS[0].id},version:'v1'};assert.equal(validateRecord(row).fields.icon,ACCOUNT_ICONS[0].id);assert.equal(validateRecord({...row,fields:{...row.fields,icon:''}}).fields.icon,'');assert.throws(()=>validateRecord({...row,fields:{...row.fields,icon:'https://example.com/icon.png'}}),/有效图标/);});
+test('固定投资账户修改资金配置时保留图标，也可显式清除',()=>{let records=ensureInvestmentAccounts([]);const settings=Object.fromEntries(['股票','基金','贵金属'].map(kind=>[kind,{enabled:false,opening:'',icon:ACCOUNT_ICONS[0].id}]));records=configureInvestmentAccounts(records,settings,{version:'v1',now:'2026-11-26T00:00:00Z'});assert.ok(records.every(r=>r.fields.icon===ACCOUNT_ICONS[0].id));for(const value of Object.values(settings))delete value.icon;records=configureInvestmentAccounts(records,settings,{version:'v2',now:'2026-11-26T00:01:00Z'});assert.ok(records.every(r=>r.fields.icon===ACCOUNT_ICONS[0].id));settings.股票.icon='';records=configureInvestmentAccounts(records,settings,{version:'v3',now:'2026-11-26T00:02:00Z'});assert.equal(records.find(r=>r.title==='股票').fields.icon,'');});

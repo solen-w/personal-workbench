@@ -1,4 +1,4 @@
-import {searchInvestmentCatalog} from './investment-catalog.js?v=20261126-calendar-9';
+import {searchInvestmentCatalog} from './investment-catalog.js?v=20261126-icons-1';
 // 代码联想仅填充品种和报价，保留用户输入的成本、份额与资金账户。
 export function attachInvestmentLookup({dialog,code,kind,title,price,date,records,refresh,onSelect,catalog=searchInvestmentCatalog,delay=150}){
   if(code.disabled)return;

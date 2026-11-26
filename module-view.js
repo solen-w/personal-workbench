@@ -1,14 +1,15 @@
-import {createCalendarView} from './calendar-view.js?v=20261126-calendar-9';
-import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-9';
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-9';
-import {createInvestmentView} from './investment-view.js?v=20261126-calendar-9';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-9';
-import {createAccountView} from './account-view.js?v=20261126-calendar-9';
-import {createReadingView} from './reading-view.js?v=20261126-calendar-9';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-9';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-9';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-9';
-import {uid} from './core.js?v=20261126-calendar-9';
+import {accountIconElement,createAccountIconPicker} from './account-icons.js?v=20261126-icons-1';
+import {createCalendarView} from './calendar-view.js?v=20261126-icons-1';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-icons-1';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-icons-1';
+import {createInvestmentView} from './investment-view.js?v=20261126-icons-1';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-icons-1';
+import {createAccountView} from './account-view.js?v=20261126-icons-1';
+import {createReadingView} from './reading-view.js?v=20261126-icons-1';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-icons-1';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-icons-1';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-icons-1';
+import {uid} from './core.js?v=20261126-icons-1';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -53,6 +54,7 @@ export function createModuleView(api){
     const fragment=document.createDocumentFragment();
     for(const field of def.fields){if(field.internal)continue;const label=element('label','module-field',field.label);let input;
       if(field.type==='partialdate'){const control=partialDateControl(record?.fields[field.key]||'',field.key);input=control.input;label.append(control.controls);}
+      else if(field.type==='icon'){const picker=createAccountIconPicker(record?.fields[field.key]||'');input=picker.input;label.append(picker.control);}
       else if(field.type==='textarea'){input=document.createElement('textarea');input.rows=field.key==='content'?9:4;}
       else if(field.type==='account'){input=document.createElement('select');const empty=element('option','','不关联账户');empty.value='';input.append(empty);for(const account of allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account'&&(!field.accountType||item.fields.kind===field.accountType)&&(!item.fields.investmentKind||field.accountType==='投资'||investmentCashEnabled(item)))){const option=element('option','',account.title+(account.fields.status==='已停用'?'（已停用）':''));option.value=account.id;input.append(option);}const old=record?.fields[field.key];if(old&&![...input.options].some(option=>option.value===old)){const option=element('option','',old);option.value=old;input.append(option);}}
       else if(field.type==='select'){input=document.createElement('select');for(const value of field.options){const option=element('option','',value);option.value=value;input.append(option);}}
@@ -80,7 +82,7 @@ export function createModuleView(api){
   function showDetail(record){
     if(record.module==='财务管理'&&financeVariant(record)==='investment'){investmentView.detail(record);return;}
     $('detail-title').textContent=record.title;const content=$('detail-content');content.replaceChildren();
-    for(const field of getDefinition(record.module,record.variant).fields){if(record.module==='财务管理'&&record.variant==='saving'&&field.key==='due')continue;const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
+    for(const field of getDefinition(record.module,record.variant).fields){if(field.type==='icon'||record.module==='财务管理'&&record.variant==='saving'&&field.key==='due')continue;const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
       if(field.type==='url'){const link=element('a','record-link',value);link.href=value;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}else section.append(element('div','detail-text',field.type==='account'?accountName(value):field.type==='partialdate'?displayPartialDate(value):value));content.append(section);
     }
     if(record.module==='财务管理'&&financeVariant(record)==='account'){content.prepend(element('p','account-detail-balance','当前金额 ¥ '+money(accountBalance(record,allRecords()))));const history=allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account-entry'&&['account','from','to'].some(key=>item.fields[key]===record.id)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));if(history.length){const section=element('section','detail-field');section.append(element('h3','','余额操作记录'));for(const item of history)meta(section,item.fields.date,item.fields.kind==='转账'?accountName(item.fields.from)+' → '+accountName(item.fields.to)+' · ¥ '+item.fields.amount:item.fields.method+' · '+item.fields.delta);content.append(section);}}
@@ -134,7 +136,7 @@ export function createModuleView(api){
   }
   function renderFinanceCard(card,record){
     const fields=record.fields,variant=financeVariant(record),cash=value=>'¥ '+money(value);
-    if(variant==='account'){const title=card.querySelector('.record-title'),row=element('div','account-overview'),identity=element('div','account-identity');identity.append(title);if(fields.note)identity.append(element('p','account-note',fields.note));row.append(identity,element('strong','account-balance',cash(accountBalance(record,allRecords()))));card.append(row);}
+    if(variant==='account'){const title=card.querySelector('.record-title'),row=element('div','account-overview'),identity=element('div','account-identity');const titleLine=element('div','account-title-line');titleLine.append(accountIconElement(fields.icon),title);identity.append(titleLine);if(fields.note)identity.append(element('p','account-note',fields.note));row.append(identity,element('strong','account-balance',cash(accountBalance(record,allRecords()))));card.append(row);}
     if(variant==='budget'){card.append(element('strong','finance-amount',cash(amountCents(fields.amount))+' / 周'));meta(card,'生效周',fields.weekStart);}
     if(variant==='recovery'){card.append(element('strong','finance-amount',cash(amountCents(fields.amount))));meta(card,'预算周',fields.weekStart);meta(card,'回收日期',fields.date);meta(card,'转出账户',accountName(fields.from));meta(card,'转入账户',accountName(fields.to));}
     if(variant==='investment'){const value=investmentValue(record);card.append(element('strong','finance-amount',cash(value.current)));meta(card,'代码',fields.symbol);meta(card,'成本价 / 观察价',fields.cost+' / '+fields.price);meta(card,'数量',fields.quantity);meta(card,'观察盈亏',cash(value.change));meta(card,'价格记录日期',fields.date);}

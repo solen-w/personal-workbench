@@ -1,8 +1,9 @@
-import {investmentAccountId,investmentKind,validateInvestmentEvent,validateInvestmentQuote,positionValue} from './investment-core.js?v=20261126-calendar-9';
-import {validPartialDate} from './workspace-core.js?v=20261126-calendar-9';
-import {MODULE_ALIASES} from './config.js?v=20261126-calendar-9';
-import {FINANCE_FORMS,normalizeAccountType,signedCents,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261126-calendar-9';
-export {amountCents,money,financeTotals} from './finance-core.js?v=20261126-calendar-9';
+import {accountIcon} from './account-icons.js?v=20261126-icons-1';
+import {investmentAccountId,investmentKind,validateInvestmentEvent,validateInvestmentQuote,positionValue} from './investment-core.js?v=20261126-icons-1';
+import {validPartialDate} from './workspace-core.js?v=20261126-icons-1';
+import {MODULE_ALIASES} from './config.js?v=20261126-icons-1';
+import {FINANCE_FORMS,normalizeAccountType,signedCents,amountCents,money,financeTotals,investmentValue,mondayOf} from './finance-core.js?v=20261126-icons-1';
+export {amountCents,money,financeTotals} from './finance-core.js?v=20261126-icons-1';
 const field=(key,label,type='text',options={})=>({key,label,type,...options});
 export const MODULES={
   '基础情况':{kind:'profile',label:'个人资料',action:'编辑资料',titleLabel:'姓名',fields:[field('gender','性别','select',{options:['未填写','男','女','其他']}),field('birthday','出生日期','date'),field('phone','联系方式'),field('email','邮箱','email'),field('occupation','职业'),field('politics','政治面貌'),field('hometown','户籍地'),field('address','住址'),field('intro','个人简介','textarea')]},
@@ -37,6 +38,7 @@ export function validateRecord(value){
   if(!module||typeof value.title!=='string'||!value.title.trim()||value.title.length>200||typeof value.id!=='string'||!value.id||value.id.length>200||typeof value.version!=='string'||!value.version||value.version.length>200)throw new Error('内容记录格式不正确。');
   const fields={};for(const field of module.fields){const v=value.fields?.[field.key]??'';if(typeof v!=='string'||v.length>(field.max||10000))throw new Error(`${field.label}格式不正确。`);if(field.required&&!v.trim())throw new Error(`请填写${field.label}。`);
     if(v&&field.type==='select'&&!field.options.includes(v))throw new Error(`${field.label}选项不正确。`);
+    if(v&&field.type==='icon'&&!accountIcon(v))throw new Error('请选择图标库中的有效图标。');
     if(v&&field.type==='date'&&(!/^\d{4}-\d{2}-\d{2}$/.test(v)||!Number.isFinite(Date.parse(v))||new Date(v).toISOString().slice(0,10)!==v))throw new Error(`${field.label}日期不正确。`);
     if(v&&field.type==='number'&&(!Number.isFinite(Number(v))||Number(v)<(field.min??0)||Number(v)>(field.max??1e12)||!Number.isInteger(Number(v))))throw new Error(`${field.label}需为有效整数。`);
     if(v&&field.type==='money')amountCents(v);

@@ -1,4 +1,4 @@
-import {investmentTotals,positionValue,baseInvestmentCost} from './investment-core.js?v=20261126-calendar-9';
+import {investmentTotals,positionValue,baseInvestmentCost} from './investment-core.js?v=20261126-icons-1';
 export const CALENDAR_FORMAT='workbench-investment-calendar-v1';
 export const beijingDay=(now=Date.now())=>new Date(now+8*3600000).toISOString().slice(0,10);
 export const addCalendarDays=(day,n)=>new Date(Date.parse(day+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
