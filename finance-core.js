@@ -1,4 +1,4 @@
-import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-calendar-8';
+import {investmentAccountState,investmentKind,investmentEvents,investmentPosition,managedInvestmentAccount,investmentAccountId,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS} from './investment-core.js?v=20261126-calendar-9';
 const f=(key,label,type='text',options={})=>({key,label,type,...options});
 export const ACCOUNT_TYPES=['现金','储蓄','投资','负债','其他'];
 export const normalizeAccountType=value=>({'银行卡':'储蓄','支付宝':'现金','微信':'现金','投资账户':'投资'}[value]||value||'其他');
@@ -14,7 +14,7 @@ export const FINANCE_FORMS={
   'investment-event':{kind:'investment-event',fields:[f('holdingId','持仓编号','text',{required:true}),f('action','交易操作','select',{options:['trade','apply','confirm','arrive','cancel','fail','resolve','correct'],required:true}),f('orderId','基金申请编号'),f('sequence','顺序','number',{required:true,min:1}),f('data','交易内容','textarea',{required:true,max:10000})]},
   'investment-quote':{kind:'investment-quote',fields:[f('kind','行情类别','select',{options:['股票','基金','贵金属'],required:true}),f('code','代码','text',{required:true}),f('price','报价','decimal',{precision:4,required:true}),f('date','报价日期','date',{required:true}),f('asOf','供应商报价时间','text',{required:true}),f('source','来源','select',{options:['tencent','eastmoney','jdjygold'],required:true})]},
   analysis:{kind:'analysis',label:'克制分析',action:'',titleLabel:'',fields:[]},
-  saving:{kind:'saving',label:'事项储蓄',action:'新增事项储蓄',titleLabel:'目标名称',fields:[f('target','目标金额','money',{required:true}),f('current','已存金额','money',{required:true}),f('account','关联账户','account'),f('due','目标日期','date'),f('plan','存款计划','textarea')]}
+  saving:{kind:'saving',label:'事项储蓄',action:'新增事项储蓄',titleLabel:'目标名称',fields:[f('target','目标金额','money',{required:true}),f('current','已存金额','money',{required:true}),f('account','关联账户','account'),f('due','目标日期','date',{internal:true}),f('plan','存款计划','textarea')]}
 };
 export const financeVariant=record=>record.variant||'ledger';
 export function signedCents(value){const text=String(value||'0');return text.startsWith('-')?-amountCents(text.slice(1)):amountCents(text);}

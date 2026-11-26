@@ -1,14 +1,14 @@
-import {createCalendarView} from './calendar-view.js?v=20261126-calendar-8';
-import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-8';
-import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-8';
-import {createInvestmentView} from './investment-view.js?v=20261126-calendar-8';
-import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-8';
-import {createAccountView} from './account-view.js?v=20261126-calendar-8';
-import {createReadingView} from './reading-view.js?v=20261126-calendar-8';
-import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-8';
-import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-8';
-import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-8';
-import {uid} from './core.js?v=20261126-calendar-8';
+import {createCalendarView} from './calendar-view.js?v=20261126-calendar-9';
+import {attachAccountSwipe} from './account-swipe.js?v=20261126-calendar-9';
+import {attachInvestmentLookup} from './investment-lookup.js?v=20261126-calendar-9';
+import {createInvestmentView} from './investment-view.js?v=20261126-calendar-9';
+import {investmentTotals,investmentEvents,investmentKind,managedInvestmentAccount,investmentCashEnabled,INVESTMENT_ACCOUNT_KINDS,investmentProfitClass} from './investment-core.js?v=20261126-calendar-9';
+import {createAccountView} from './account-view.js?v=20261126-calendar-9';
+import {createReadingView} from './reading-view.js?v=20261126-calendar-9';
+import {workspaceProfile,displayPartialDate,experienceOrder,syncDate} from './workspace-core.js?v=20261126-calendar-9';
+import {ACCOUNT_TYPES,normalizeAccountType,assetTotals,FINANCE_TABS,financeVariant,weekReport,accountBalance,accountCashBalance,investmentValue,validateFinanceChange,mondayOf,addDays} from './finance-core.js?v=20261126-calendar-9';
+import {MODULES,getDefinition,validateRecord,amountCents,financeTotals,money,progress,localDay,weekDays,FILE_LIMIT} from './module-core.js?v=20261126-calendar-9';
+import {uid} from './core.js?v=20261126-calendar-9';
 const $=id=>document.getElementById(id);
 function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
 function button(text,action,className='button'){const node=element('button',className,text);node.type='button';node.onclick=action;return node;}
@@ -80,7 +80,7 @@ export function createModuleView(api){
   function showDetail(record){
     if(record.module==='财务管理'&&financeVariant(record)==='investment'){investmentView.detail(record);return;}
     $('detail-title').textContent=record.title;const content=$('detail-content');content.replaceChildren();
-    for(const field of getDefinition(record.module,record.variant).fields){const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
+    for(const field of getDefinition(record.module,record.variant).fields){if(record.module==='财务管理'&&record.variant==='saving'&&field.key==='due')continue;const value=record.fields[field.key];if(!value)continue;const section=element('section','detail-field');section.append(element('h3','',field.label));
       if(field.type==='url'){const link=element('a','record-link',value);link.href=value;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}else section.append(element('div','detail-text',field.type==='account'?accountName(value):field.type==='partialdate'?displayPartialDate(value):value));content.append(section);
     }
     if(record.module==='财务管理'&&financeVariant(record)==='account'){content.prepend(element('p','account-detail-balance','当前金额 ¥ '+money(accountBalance(record,allRecords()))));const history=allRecords().filter(item=>item.module==='财务管理'&&financeVariant(item)==='account-entry'&&['account','from','to'].some(key=>item.fields[key]===record.id)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));if(history.length){const section=element('section','detail-field');section.append(element('h3','','余额操作记录'));for(const item of history)meta(section,item.fields.date,item.fields.kind==='转账'?accountName(item.fields.from)+' → '+accountName(item.fields.to)+' · ¥ '+item.fields.amount:item.fields.method+' · '+item.fields.delta);content.append(section);}}
@@ -138,7 +138,7 @@ export function createModuleView(api){
     if(variant==='budget'){card.append(element('strong','finance-amount',cash(amountCents(fields.amount))+' / 周'));meta(card,'生效周',fields.weekStart);}
     if(variant==='recovery'){card.append(element('strong','finance-amount',cash(amountCents(fields.amount))));meta(card,'预算周',fields.weekStart);meta(card,'回收日期',fields.date);meta(card,'转出账户',accountName(fields.from));meta(card,'转入账户',accountName(fields.to));}
     if(variant==='investment'){const value=investmentValue(record);card.append(element('strong','finance-amount',cash(value.current)));meta(card,'代码',fields.symbol);meta(card,'成本价 / 观察价',fields.cost+' / '+fields.price);meta(card,'数量',fields.quantity);meta(card,'观察盈亏',cash(value.change));meta(card,'价格记录日期',fields.date);}
-    if(variant==='saving'){progressBar(card,record);meta(card,'关联账户',accountName(fields.account));meta(card,'目标日期',fields.due);}
+    if(variant==='saving'){progressBar(card,record);meta(card,'关联账户',accountName(fields.account));}
   }
   function exportCurrent(){
     const def=definition(),escape=value=>{let text=String(value??'');if(/^[=+@\-]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
